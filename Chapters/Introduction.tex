@@ -1,5 +1,6 @@
 \chapter{Introduction}
 \chaptermark{Introduction}
+\label{chap:intro}
 \justifying
 \setlength{\parindent}{0em}
 % \textbf{The primary goal of this PhD is to create a method for generating explanations of a deep neural network’s (DNN's) classification that are both human-understandable (interpretable) and accurate (faithful) with respect to how  the  network reached  the classification}
@@ -28,26 +29,161 @@ In recent years there has been growing recognition beyond academia of the need t
 
 \section{ Artificial Neural Networks Explainability Methods}
 
-For one to develop methods which will make neural networks deemed \emph{trusted} and accepted by the user, one must have clear criteria of when one has succeeded in creating a \emph{trustworthy} method. However, trust and acceptance are concepts that are hard to quantify and formalise~\cite{doshi2017towards, Lipton18} and as such, it is hard for them to be used to guide the development of \emph{safe} ML algorithms. Hence, achieving human-understandable (\textit{interpretable}) explanations that are reliable (\textit{faithful}) with respect to how the classifier makes its decisions has been primary focus of the field. Achieving these properties is a crucial stepping stone for achieving trust~\cite{Lipton18}. The research area that addresses the problem of neural networks explainability is part of the broader area of explainable artificial intelligence (XAI).
+To develop methods which will make neural networks deemed \emph{trusted}, one must have clear criteria of when they have succeeded. However, trust is a concept that is difficult to quantify and formalize~\cite{doshi2017towards, Lipton18}, making it challenging to use as a guiding principle in developing explainable and safe machine learning algorithms.Consequently, the primary focus has shifted to achieving human-understandable (\textit{interpretable}) explanations that are also accurate (\textit{faithful}) representations of the classifier's decision-making process. Achieving these properties is a crucial stepping stone for building trust~\cite{Lipton18}. The research area that addresses the problem of neural networks explainability is part of the broader area of explainable artificial intelligence (XAI).
 
-The techniques developed for explaining neural networks fall within two broad categories of intrinsic explainability and post-hoc explainability (see Chapter~\ref{chap:lit}). The intrinsically explainable models have a primary focus on either acquiring an interpretable variant of the current model~\cite{VandewieleJOTH16, BastaniKB17a}, refining the existing model by adding constrains to boost its interpretability~\cite{ZhangWZ18a, NguyenYC16, SabourFH17}, or adapting the learning process to yield a model that is inherently more interpretable~\cite{LinsleySES19, ShiXXCLLG21}. These strategies present a compromise, enabling the employment of precise and sophisticated models, while also achieving a certain degree of interpretability. However, placing excessive focus on one aspect (\ie accuracy or interpretability) can greatly reduce the effectiveness of the other. Current research is directed towards resolving this problem by finding ways to maintain high accuracy while also offering transparent understanding of the model's decision-making process. Due to the difficulties inherent in creating models that are intrinsically interpretable, recent studies are more and more focused on interpreting models after they have been trained. Initial approaches to post-hoc explanations were low in interpretability and had significant fidelity issues. They produced explanations that were difficult to understand and did not accurately reflect the model's reasoning~\cite{SimonyanVZ13, SpringenbergDBR14}. Subsequent methods improved human comprehension but may not truly represent the model's internal workings~\cite{Ribeiro0G16, LundbergL17, ElenbergDFK17, Ribeiro0G18}. These methods emphasise parts of the input already understandable to humans and show if they are significant to the classification. By clustering smaller units (like image pixels) into larger features (like superpixels), these methods present a limited set of information to the user. It has been shown that a human can not comprehend more than three to five meaningful item at once~\cite{cowan2001magical, starkey1995development, morris2018human}, so presenting these higher-level explanations enhances interpretability. However, these explanation methods, which assign importance based on how feature modifications affect the classification, can lead to unfaithful explanations. These methods may overlook important features or wrongly attribute importance to irrelevant ones, especially in cases of low classification certainty~\cite{Kottke}. Recognising these fidelity issues has become a distinct research area~\cite{KindermansHAASDEK19, DombrowskiAAAMK19, GhorbaniAZ19}. Methods following the fidelity critiques of interpretability methods, have aimed to resolve fidelity problems in explanations~\cite{ShrikumarGK17, SundararajanTY17, SmilkovTKVW17, ChattopadhyaySH18, bach2015pixel}. However, they assess each part of the input making their interpretability not as high as methods grouping smaller units into larger features. The future direction in machine learning interpretability is arguably moving towards a blend of approaches, where explanations are both highly interpretable as the big feature methods, and faithful to the actual workings of the model (\ie encompass all key fidelity properties), similar to recent methods.
+The techniques developed for explaining neural networks fall within two broad categories of intrinsic explainability and post-hoc explainability~\cite{ArrietaRSBTBGGM20, DuLH20, IbrahimS23}(see Chapter~\ref{chap:lit}). Intrinsic explainability methods involve designing models that are interpretable by nature, while post-hoc explainability techniques seek to interpret models after training without altering their internal structures. Intrinsic methods often face a trade-off between interpretability and performance. Highly interpretable models may not achieve the same level of accuracy as complex ones. Post-hoc explainability techniques aim to interpret models after they have been trained without altering their internal structure. The challenge is that post-hoc methods may produce explanations that lack fidelity, meaning they do not accurately reflect the true reasoning of the model. This lack of fidelity can result in misleading interpretations, undermining the trustworthiness of the explanations.
+
+Balancing interpretability and faithfulness in explanations is a significant challenge in the field. Currently post-hoc explainability methods, which are interpretable create abstractions that lower the faithful of the interpretation. Conversely, methods that prioritise faithfulness tend to decrease interpretability by overwhelming the user with excessive information. Interpreting models that process high-dimensional inputs, such as images, requires simplifying vast amounts of information without compromising the faithfulness of the explanation.
+
+Given these challenges, this research seeks to bridge the gap by developing techniques that simplify explanations through the grouping of correlated input features. This approach aims to make explanations more accessible to human understanding while accurately reflecting the model's decision-making process.
+
+\section{Thesis Aims}
+
+The primary aim of this thesis is to develop methods that enhance the interpretability of neural network models without compromising the fidelity of their internal decision-making processes.
+
+Human cannot comprehend more than three to five meaningful items at once~\cite{cowan2001magical, starkey1995development, morris2018human}. Therefore, interpretability can be enhanced by presenting fewer features in explanations.
+
+In high-dimensional inputs such as images, simply showing the most important features may not be effective, as these features might be strongly correlated. For example, when looking at a picture of a cat, no single feature (i.e., pixel) is more important than any other pixel in isolation. However, when combined, they form complex features (e.g., ears), which are significant in identifying the overall image as that of a cat.
+
+This thesis proposes developing an approach that groups correlated input features into \emph{complex input features}, thereby reducing the complexity of explanations. These features must be meaningful to the explainee and significant for the neural network.
+
+Some existing methods assign a value of relevance to groups of features~\cite{Ribeiro0G16, LundbergL17}. However, these methods often create linear approximations of the decision boundary for those features and, therefore, suffer from fidelity issues. This thesis aims to propose rules for assigning importance to complex input features without oversimplifying the neural network's decision boundary. 
+
+The method should assign a single importance value to each complex input feature, ensuring that the explanation reflects the model's true reasoning. Furthermore, the method should be computationally feasible for large-scale neural networks, enabling practical applicability.
+
+The thesis further aims to evaluate the efficacy of the proposed method compared to other widely used explainability methods.
+
+\section{Thesis Structure and Contributions}
+
+This thesis is organised into several chapters, each building toward the goal of enhancing the interpretability of neural networks, with a particular focus on convolutional neural networks (CNNs) while maintaining fidelity. Below is an overview of the thesis structure and the main contributions of each chapter.
+
+\subsection{Chapter 1: Introduction}
+
+Chapter~\ref{chap:intro}, introduces the motivation behind the research, the importance of explainability in neural networks, and outlines the thesis aims and objectives.
+
+\subsubsection*{Contribution of the Chapter}
+It sets the stage for the thesis by highlighting the need for methods that enhance interpretability by preserving fidelity.
+
+\subsection{Chapter 2: Background}
+
+In Chapter~\ref{chap:background}, the foundational knowledge on artificial neural networks is provided, focusing on their mathematical foundations and computational structures. It covers essential concepts such as neurons, layers, activation functions, and delves into convolutional neural networks (CNNs) and their common layers.
+
+\subsubsection*{Contribution of the Chapter}
+The Chapter establishes the necessary background for understanding the proposed rules for assigning importance to complex input features from Chapters~\ref{chapter:revLRP} and Chapters~\ref{chapter:REVEAL} and prepares the reader for the technical discussions in subsequent chapters.
+
+\section*{Chapter 3: Literature Review}
+
+This chapter provides a comprehensive review of interpretability methods for deep neural networks within the field of explainable artificial intelligence (XAI). The methods are categorized into two main groups:
+
+\begin{enumerate}
+    \item \textbf{Intrinsic Interpretability}: Focuses on designing inherently transparent models. Techniques discussed include:
+    \begin{itemize}
+        \item Adding interpretability constraints within neural networks~\cite{ZhangWZ18a, SabourFH17}.
+        \item Model extraction methods~\cite{VandewieleJOTH16, BastaniKB17a}.
+        \item Attention-based approaches~\cite{BahdanauCB14, XiaoXYZPZ15}.
+        \item Loss-based methods that focus on specific input parts or learn concrete patterns~\cite{ShiXXCLLG21, LinsleySES19}.
+    \end{itemize}
+    However, intrinsic methods often face limitations like a trade-off between interpretability and performance.
+
+    \item \textbf{Post-hoc Explanations}: Interpret complex, pre-trained models without altering their architecture or compromising performance~\cite{MarkusKR21, AdebayoGMGHK18}. These are further divided into:
+    \begin{itemize}
+        \item \textbf{Global Explanations}: Such as activation maximization~\cite{SimonyanVZ13, NguyenDYBC16} and methods for sequential data~\cite{KarpathyJL15, KadarCA17}, which help visualize preferred inputs or internal representations.
+        \item \textbf{Local Explanations}: Particularly relevant to this thesis. Methods include:
+        \begin{itemize}
+            \item LIME~\cite{Ribeiro0G16} and SHAP~\cite{LundbergL17}, which create interpretable models approximating complex models near specific input features.
+            \item Class activation mapping~\cite{ZhouKLOT16, SelvarajuCDVPB20}.
+            \item Back-propagation-based methods like Layer-wise Relevance Propagation (LRP)~\cite{bach2015pixel}, detailed further in Chapter~\ref{chapter:revLRP} as a foundation for the proposed methods.
+        \end{itemize}
+    \end{itemize}
+\end{enumerate}
+
+The chapter identifies key properties essential for effective explanations:
+\begin{itemize}
+    \item \textbf{Fidelity}: Accuracy in reflecting the model's true reasoning~\cite{SundararajanTY17}.
+    \item \textbf{Input Invariance}: Consistency in explanations for similar inputs~\cite{AnconaCOG19}.
+    \item \textbf{Handling of Saturation}: Addressing issues where gradients may vanish~\cite{NielsenDRRB22}.
+    \item \textbf{Sensitivity}: The explanation's responsiveness to changes in input~\cite{SundararajanTY17}.
+\end{itemize}
+
+Challenges such as achieving high interpretability without sacrificing fidelity are discussed~\cite{KindermansHAASDEK19, AdebayoGMGHK18}, along with the importance of computational efficiency for practical applications~\cite{GhorbaniAZ19}.
+
+\subsubsection*{Contribution of the Chapter}
+
+The literature review lays the groundwork for the thesis by:
+\begin{itemize}
+    \item Highlighting the limitations of existing interpretability methods, especially the trade-offs involved.
+    \item Emphasizing the need for post-hoc local explanation techniques that do not compromise model performance.
+    \item Identifying gaps in current research, particularly in balancing interpretability, fidelity, and computational efficiency for high-dimensional data like images~\cite{YehHSIR19}.
+\end{itemize}
+
+Building on these insights, the chapter justifies the thesis's focus on developing post-hoc local methods that enhance interpretability while maintaining fidelity, aligning with the overarching goals of advancing practical and effective XAI solutions.
 
 
-\section{Thesis Aims \& Structure}
+\subsection{Chapter 4: Multi-faceted Clustering Approaches
+for Isolating Complex Input Features}
 
-This thesis aims to investigate the gap between faithfulness and interpretability of the explanation. In Chapter~\ref{chap:framework} a unified framework is proposed for creating methods that could generate both faithful and comprehensible explanations. The first challenge in creating explanations that are more easily comprehensible is isolating key complex input features in deep neural networks. The second challenge is finding the importance of such regions that is faithful to the model and doesn't lead to oversimplification. 
+In Chapter~\ref{chap:clustering}, novel clustering methods for grouping correlated input features into complex input features are introduces. It details the algorithms developed for clustering and their application to image data.
 
-Chapter~\ref{chap:clustering} focuses on heatmap-based clustering techniques. The approach of using heatmap clustering to highlight crucial features for the network's decision-making process, links the selected complex input features directly to the network's internal representations. However, the challenge lies in the interpretability of these extracted features. To address this, the thesis integrates the object detection model Segment Anything Model (SAM)~\cite{kirillov2023segment} with the heatmap clustering method, enhancing the understanding of the network's prioritised areas of the input. 
+\subsubsection*{Contribution of the Chapter}
 
-This technique crucially feeds into the broader objective of assigning singular importance values to the complex input features. This thesis outlines two primary methods to address the challenge of assigning a single value of relevance to complex input features. The first is reverse relevance distribution tracing (see Chapter~\ref{chapter:revLRP}), which inspects part of the input with respect to the distribution of relevance it had by an explainability method. The second is forward pass retracing (see Chapter~\ref{chapter:REVEAL}), which inspects the contribution of complex input feature to the output with respect to the inference step. 
+\begin{enumerate}
+\item Provided a formal definition of \emph{Complex Input Features} for image data, establishing a theoretical foundation for subsequent methods and ensuring a clear understanding of what constitutes a complex feature within the context of neural network interpretability.
+\item Introduced a novel heatmap-based clustering approach that uses relevance heatmaps to detect and cluster coherent groups of pixels. This method includes a two-stage filtering process to remove irrelevant features, thereby enhancing the quality and relevance of the clusters before applying DBSCAN for clustering. The approach was evaluated qualitatively using a range of interpretability techniques and neural networks, demonstrating its effectiveness in identifying meaningful feature groups.
+\item Developed an enhanced method that integrates object detection algorithms with the heatmap-based clustering technique to improve human interpretability. This method identifies distinct objects or regions within an image and selects the most relevant ones based on heatmap-derived significance. It includes multiple augmentation steps to enhance the applicability of object detection for interpretability tasks and introduces three distinct techniques for combining object detection with heatmap-based clustering. This integration ensures that the identified clusters correspond to semantically meaningful objects, thereby bridging the gap between automated feature detection and human-understandable interpretations.
+\item Implemented comprehensive preprocessing steps for object detection, including generating masks for undetected regions and resolving overlapping clusters. These steps ensure comprehensive coverage of the image and eliminate redundancies, resulting in more accurate and meaningful clustering outcomes. The use of Fisher-Jenks natural breaks and thresholding techniques further refines the selection of relevant pixels, enhancing the overall quality of the clusters.
+ 
+\item Conducted qualitative evaluations across multiple neural network architectures (e.g., VGG16~\cite{SimonyanZ14a}, VGG19~\cite{SimonyanZ14a}, ResNet50~\cite{he2015deep}, InceptionV3~\cite{szegedy2015rethinking}) and interpretability techniques, showcasing the versatility and robustness of the proposed clustering methods. This broad evaluation highlights the method's applicability to various models and its ability to consistently identify meaningful feature clusters regardless of the underlying network architecture.
+\end{enumerate}
 
-The reverse relevance distribution tracing is based on top of LRP~\cite{bach2015pixel}, but any method that distributes relevance layer by layer can be utilised. The method finds the amount of relevance distributed during the relevance propagation method for each layer. Next the relevance is scaled by the new amount of relevance that is propagated only from the complex input feature. This new amount is then propagated forward to the neurons in the next layer until the classification is reached. A critical drawback of  this type of forward relevance propagation is the computational complexity and memory intensity of the computation of the relevance values. 
+The two-stage filtering process significantly reduces the number of pixels to be clustered, the approach remains effective even for large input. This ensures that the method can be applied to real-world, high-dimensional data without prohibitive computational costs.
 
-Forward pass retracing is designed to address the computational complexity and memory intensity of reverse relevance distribution tracing, offering a more feasible and efficient method for network interpretation. This pass is carried out with modified functions that replicate the network's behaviour during the inference step only on the complex input feature. By doing so, the method directly analyses how the input features influence each layer and most importantly the output. A particular focus of those rules is to preserve the contribution signal through the network. This is particularly challenging as unlike other methods, only a subset of the activations are distributed during the forward pass. This method is evaluated on VGG16~\cite{SimonyanZ14a}, VGG19~\cite{SimonyanZ14a}, ResNet50~\cite{he2015deep}, InceptionV3~\cite{szegedy2015rethinking} and  DenseNet121~\cite{huang2018densely} based on the widely recognised ImageNet Large Scale Visual Recognition Challenge 2012 (ILSVRC 2012) dataset~\cite{ILSVRC15}. The results in Chapter~\ref{chapter:results} compare the method proposed both qualitatively and quantitatively against established attribution methods.
+By combining object detection with heatmap clustering, the chapter enhances the human interpretability of neural network decisions. The resulting clusters correspond to recognisable objects or regions, making it easier for users to understand and trust the model's predictions. It sets the foundations for next chapters, where the complex input features identified using the techniques in Chapter~\ref{chap:clustering} are used as the input for the rules defined in Chapter~\ref{chapter:revLRP} and Chapter~\ref{chapter:REVEAL}.
+
+\subsection{Chapter 5: Relevance Distribution Tracing}
+
+Chapter~\ref{chapter:revLRP} introduces a novel approach to reversing Layer-wise Relevance Propagation (LRP) to assign importance values to groups of features.
+
+The chapter begins by examining the limitations of naive aggregation methods for relevance scores, noting how simple aggregation can obscure critical nuances and interdependencies among features. This limitation impacts the accuracy of interpretations by failing to capture the complex interactions within neural networks. Recognising the inherent interdependence of features, the chapter explains how transformations and interactions across neural network layers influence the relevance attributed to input features. Following this, a detailed explanation of the basic LRP rule is provided, with a step-by-step breakdown of the mathematical operations involved, establishing a foundation for the proposed reversal method.
+
+\subsubsection*{Contribution of the Chapter}
+
+\begin{enumerate} 
+    \item It introduces the method of \emph{Reverse Relevance Distribution Tracing}, which reverses the LRP process to assign a single relevance value to each cluster of features. This novel approach enhances interpretability while preserving the original faithfulness of LRP.
+    \item Vector-based definitions for LRP rules are presented, moving from neuron-level descriptions to a more generalized and accessible framework. A set of rules is developed to reverse the relevance propagated by basic LRP rules, enabling backward tracing of relevance distribution throughout the network.
+    \item The method is further extended to incorporate the Alpha Beta rule, allowing for a more nuanced distribution of relevance scores. This extension improves adaptability across various neural network layers and architectures, accommodating both positive and negative feature contributions.
+    \item The chapter critically evaluates the computational complexity and memory requirements of the proposed method, particularly focusing on the challenges posed by Jacobian calculations in large, multi-layered networks. Practical limitations, such as memory constraints encountered on high-capacity GPUs, especially with networks like VGG16, are also discussed.
+
+\end{enumerate}
+Potential strategies to mitigate these computational challenges are suggested, including simplifications of model architectures, approximation techniques, and the use of parallel processing. This discussion lays the groundwork for the following chapter, which introduces a more computationally efficient method.
+
+\subsection{Chapter 6: Contribution to Classification of Complex Input Features}
+Chapter~\ref{chapter:REVEAL} introduces a novel technique called \emph{Contribution to Classification} \CTC\/, which is an interpretability technique designed to accurately trace the influence of complex input features through a neural network without the computational burden associated with high-dimensional Jacobians. It further presents the results of applying the proposed method to pre-trained convolutional neural networks using large-scale image datasets. It includes qualitative and quantitative evaluations.
+
+\subsubsection*{Contribution of the Chapter}
+
+\begin{enumerate} 
+\item A formal definition of contribution to classification (\CTC\/) of a feature is provided within the neural network context, explaining how to inductively compute contributions at each layer based on the activations and contributions of preceding layers.
+\item A comprehensive set of propagation rules is developed for distributing contributions throughout various types of layers in a neural network, ensuring accurate tracing from input to output layers, including the first layer, masking after each layer, dense layers, convolutional layers, max pooling layers, batch normalization layers, concatenation layers, and average pooling layers.
+\item Presented an in-depth analysis of the differences between the \CTC\/ of a feature and classifying a feature in isolation, highlighting how \CTC\/ offers a more granular understanding of feature influence compared to traditional relevance-based methods.
+\item Demonstrated the necessity of carefully adjusting the scaling of learned parameters (e.g., biases) to prevent exponential growth or shrinkage of the contribution signal, which could lead to distorted or misleading interpretations, especially in deep networks and proposing a method that created a scaling matrix to keep contributions within the natural variability of the layer outputs.
+\item Extension of the iNNvestigate Library: A major contribution of this thesis is the expansion of the iNNvestigate library to incorporate the newly developed \CTC\/ method. By integrating these techniques into a widely used GitHub repository, this work enhances the accessibility of this method.
+\item Empirical Validation Across Major Networks: The \CTC\/ method is empirically validated using the ILSVRC 2012 dataset~\cite{ILSVRC15} across several well-known convolutional neural network architectures, including VGG16~\cite{SimonyanZ14a}, VGG19~\cite{SimonyanZ14a}, ResNet50~\cite{he2015deep}, InceptionV3~\cite{szegedy2015rethinking} and DenseNet121~\cite{huang2018densely}. This extensive evaluation shows the practical utility of these techniques, involving both qualitative and quantitative analyses. The results show that these methods significantly improve the interpretability of neural network decisions while preserving the faithfulness of the explanations.
+\end{enumerate}
+
+The chapter includes illustrative examples and figures to visually demonstrate key concepts, enhancing the accessibility and understanding of complex ideas presented. It further ensures computational efficiency and faithfulness of the \CTC\/ method by only requiring two passes through the network, one for classification and one for the explanation. The method further propagates contributions only through neurons active during the inference step, thereby providing accurate and faithful interpretations without unnecessary computational overhead.
+
+\subsection{Chapter 7: Conclusion and Future Work}
+
+Finally, Chapter~\ref{chapter:conclusion} summarizes the findings of the thesis, discusses the implications of the research, and outlines potential directions for future work.
+
+\subsubsection*{Contribution of the Chapter}
+
+\begin{enumerate}
+    \item The chapter situates the research within the broader context of explainable AI, drawing parallels with existing methods and highlighting the unique contributions of the thesis.
+    \item It outlines several avenues for future work, including enhancing feature isolation techniques, addressing computational challenges in reverse relevance distribution, extending forward pass retracing to other neural network architectures, and improving evaluation metrics.
+    \item This thesis is drawing on research that underscores human cognitive limitations. These limitations, notably the difficulty in processing more than five significant items simultaneously, are highlighted in seminal works by Cowan~\textit{et al.}\cite{cowan2001magical}, Starkey\textit{et al.}\cite{starkey1995development}, and Morris\textit{et al.}~\cite{morris2018human}. Work by~\cite{Ribeiro0G16} which conducted studies with human subjects (graduate ML students and non-technical users from Mechanical Turk) to evaluate interpretability methods that show limited number of complex input features found that explanations of this sort are preferred by users, and are able to lead to better decision-making in model-selection, feature-engineering and identifying irregularities in model-classification. This thesis focuses on finding a faithful value for complex input features, the effects of the extra information introduced of the importance of each feature has not been evaluated. The final chapter suggests conducting user studies to assess the effectiveness and usability of the proposed methods compared to other post hoc local interpretability methods.
+\end{enumerate}
 
 
-Finally, Chapter~\ref{chapter:conclusion} presents an in-depth discussion of the fidelity and interpretability of the methods proposed in this thesis. Additionally, the final chapter presents directions for future research, highlighting potential avenues to enhance the understanding and application of these methods.
-
-The next chapter~\ref{chap:background} lays the groundwork by introducing the fundamental concepts, structure, learning mechanisms and performance evaluation inherent in artificial neural networks, setting the stage for a comprehensive exploration of interpretability of these complex machine learning algorithms.
 
 

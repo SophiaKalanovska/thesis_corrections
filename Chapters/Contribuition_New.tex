@@ -1,36 +1,77 @@
-\chapter{Forward Pass Retracing: Contribution to Classification}
-\chaptermark{Forward Pass Retracing: CTC}
+\chapter{Contribution to Classification of Complex Input Features}
+\chaptermark{Forward Pass Retracing}
 \label{chapter:REVEAL}
 \newcommand{\lo}[1][j]{l_{#1}}
 \newcommand{\clo}[1][j]{\text{$c$-}\lo[#1]}
 \newcommand{\djo}[1][j]{d_{#1}}
 \newcommand{\cdjo}[1][j]{\text{$c$-}\djo[#1]}
+
 \section{Introduction}
 
+The previous chapter examined \emph{Relevance Distribution Tracing}, a technique that assigns importance to complex input features by reversing the flow of relevance through the network layers. This method enabled us to identify which features were most influential in the network's final prediction.
 
-The previous chapter delved into the intricacies of relevance distribution tracing as a technique for assigning significance to complex input features in neural networks. Despite its effectiveness, this approach concluded with an acknowledgement of the challenges posed by high-dimensional Jacobians, particularly their substantial computational and memory requirements. Forward pass retracing is designed to address these limitations, offering a more feasible and efficient method for network interpretation.
+Despite its theoretical effectiveness, relevance distribution tracing relies on the computation of high-dimensional Jacobians, which require substantial computational resources and memory. These demands become prohibitive when it comes to implementing the method, limiting the method's practicality. Additionally, relevance-based approaches may overestimate the importance of certain input parts, as they consider the feature's importance within the context of the entire input and the specific classification output, potentially overlooking how features contribute during the actual forward pass.
 
-At its core, forward pass retracing simplifies the process of determining the contribution of each input feature to the network's output. Unlike the methods discussed in Chapter~\ref{chapter:revLRP} which require three passes through the network, the forward pass retracing method operates by conducting only two forward passes similar to all other state-of the-art interpretability methods. The first pass is the inference step and it computes the activations from the input at each layer until the classification is reached. The second pass is carried out with modified functions that replicate the network's behaviour during the inference step on a complex input feature. By doing so, the method directly analyses how the complex input features influence the output in a more straightforward and computationally efficient way.
+To address these challenges, this chapter introduces a forward pass retracing method, that emphasizes the role of complex input features in contributing to the final classification. This approach focuses on calculating the \emph{Contribution To Classification (\CTC\/)} of a feature by retracing its influence through the network during the forward pass. By doing so, one can differentiate between a feature's direct contribution and its relevance within the broader input context, providing a more precise and computationally efficient explanation of the importance of complex input features during classification.
 
-This chapter comprehensively explores the mechanisms and advantages of forward pass retracing. We discuss how this method mirrors the network's inference behaviour for different types of layers, which is achieved without compromising the depth and fidelity of the interpretative insights gleaned from the network. 
+The contributions of this chapter are as follows:
 
+\begin{enumerate}
+  \item Introduced the \emph{Contribution to Classification} (\CTC\/) method, an interpretability technique that accurately traces the influence of complex input features through a neural network without the computational overhead associated with high-dimensional Jacobians.
+
+  \item Provided a formal definition of \emph{Contribution} within a neural network framework, detailing how to compute it inductively at each layer based on activations and contributions from preceding layers.
+
+  \item Developed a comprehensive set of \emph{Propagation Rules} for distributing contributions through various types of layers in a neural network, ensuring accurate tracing from input to output layers.
+
+  \item Defined specific propagation rules for different layer types, including contribution of the first layer, masking after each layer, dense layer ,convolutional layer, max pooling layer, batch normalisation layer, concatenation layer and average pooling layer rules.
+
+  \item Demonstrated the necessity of carefully adjusting the scaling of learned parameters (e.g., biases) to prevent exponential growth or shrinkage of the contribution signal, which could lead to distorted or misleading interpretations, especially in deep networks.
+
+  \item Addressed the challenge of preserving the contribution signal when dealing with learned parameters that are added or subtracted by proposing a refined method for scaling these parameters. This method adjusts the scaling matrix to keep contributions within the natural variability of the layer outputs, ensuring that the influence of learned parameters remains balanced.
+  \item Expansion of the iNNvestigate library to incorporate the newly developed \CTC\/ method. By integrating these techniques into a widely used GitHub repository, this work enhances the accessibility of these methods. 
+  \item The \CTC\/ method is empirically validated using the ILSVRC 2012 dataset~\cite{ILSVRC15} across several well-known convolutional neural network architectures, including VGG16~\cite{SimonyanZ14a}, VGG19~\cite{SimonyanZ14a}, ResNet50~\cite{he2015deep}, InceptionV3~\cite{szegedy2015rethinking} and DenseNet121~\cite{huang2018densely}. This extensive evaluation shows the practical utility of this technique, involving both qualitative and quantitative analyses. The results show that the \CTC\/ method significantly improve the interpretability of neural network decisions while preserving the faithfulness of the explanations.
+\end{enumerate}
 
 \section{Motivation}
 
-Forward pass retracing is a novel type of explanation of CNN classifications. This method emphasises the role of complex features in contributing to the final classification, a concept termed as \emph{Contribution To Classification (\CTC)}.
+The motivation for developing contribution to classification arises from the need for an interpretability method that accurately reflects the contribution of complex input features without the computational overhead associated with high-dimensional Jacobians. Through retracing the activations caused by specific features during the forward pass a detailed understanding of how these features influence the network's computations at each layer is gained, ultimately affecting the final classification. 
 
-\begin{definition}[Contribution]
-Given a trained neural network $\NN=\big(\Lambda,\passto,(f_k)_{k\in \Lambda}\big)$ with a set of layers $\Lambda=\{0,\dots, N\}$, with a single source $0\in \Lambda$, referred to as the input layer and single sink $N\in \Lambda$, referred to as the \emph{output layer}, each $f_k:\bbR^{n_j}\to \bbR^{m_k}$ describes a vector transformation associated with each layer, with the dimensionality conditions that $m_k=\sum_{j\passto k} n_j$, for all $k=1,\dots N$. For a given input vector $\vec{x}\in \bbR^d$ and a given feature $F\subseteq \bbR^2$, let the \emph{contribution} at layer $k\in \Lambda$ be inductively found, by taking:
+\begin{Definition}{Contribution}{con}
+GGiven a trained neural network $\NN=\big(\Lambda,\passto,(f_k)_{k\in \Lambda}\big)$, where $(\Lambda,\passto)$ is a directed graph over a set of \emph{layers} $\Lambda=\{0,\dots, N\}$, with a single source $0\in \Lambda$, referred to as the input layer and single sink $N\in \Lambda$, referred to as the \emph{output layer} as defined in~\Cref{def:nn}, each $f_k:\bbR^{n_j}\to \bbR^{m_k}$ describes a vector transformation associated with each layer, with the dimensionality conditions that $m_k=\sum_{j\passto k} n_j$, for all $k=1,\dots N$. For a given input vector $\vec{x}\in \bbR^d$ and a given feature $F\subseteq \bbR^2$, let the \emph{contribution} at layer $k\in \Lambda$ be inductively found, by taking:
 \begin{equation*}
        \vec{c}_k = f_i^\prime\big(\vec{a}_k,[\vec{a}_j]_{j\passto k},[\vec{c}_j]_{j\passto k}\big)
 \end{equation*}
 where $f_i^\prime$ denotes the function that modifies the behaviour of the network at layer $\Lambda_k$, depending on the type of layer $k=0,\dots, N$, so that it calculates the contribution a feature had during the forward pass. The value of the contribution $\vec{c}_k$ depends on the contributions from all preceding layers, as well as activation $\vec{a}_k$ computed during the forward pass.
-\end{definition}
+\end{Definition}
+
+\subsection{Differences between CTC of a Feature and Classification of a Feature}
+
+The contribution of a complex feature during the forward pass differs from merely classifying the feature. It operates on the premise that each feature can have varying degrees of influence at different layers of the neural network. The \CTC\ method evaluates the feature's contribution at each layer during the forward pass. This enables a more granular understanding of how the feature influences the neural network's computations at various stages, but it is not the same as classifying the feature in isolation.
+
+An example where the contribution as defined in~\Cref{def:con} and the inference output differ is when calculating the contribution of the complex input feature to a max pooling layer. If the neuron that was most active in a kernel during the forward pass has received the most contribution from the complex input feature, then the outputs of both \CTC\ and inference are the same. However, in the case where the neuron with the largest contribution is not the same, \CTC\ will select the same neuron that was selected during the forward pass and propagate the contribution of \emph{that} neuron forward, not the most active one. In this case, if the unchanged inference function is applied taking the complex input feature values as input, it can result in neurons being selected that were not pooled during the forward pass, thereby violating the faithfulness of the explanation. Figure~\ref{Fig:max_pooling} illustrates the difference between the forward-pass max pooling layer and the contribution max pooling layer.
+
+\begin{figure}[ht!]
+	\centering
+	\includegraphics[width=1\linewidth]{Figures/max_pooling.pdf}
+	\caption{A comparative illustration of the forward-pass max pooling layer (left) and the contribution max pooling layer (right). While the forward-pass selects the neuron with the highest value (0.5), the contribution layer evaluates the contribution of the feature to each neuron and selects the neuron with the highest activation during the forward pass, despite that not being the same as the highest contribution. This highlights the potential differences between the calculation of activation values and their contributions.}
+	\label{Fig:max_pooling}
+\end{figure} 
+
+Another example where \CTC\ and inference differ is in the case of a ReLU layer. For the activation of a neuron to pass through a ReLU layer, it has to be more than zero. When applying the \CTC\ method, if the partial activation (i.e., contribution) given to a neuron is negative and that neuron during the forward pass had an activation greater than zero, this negative contribution is still allowed to propagate through a ReLU layer as it signifies the influence the complex input feature has on the output. Figure~\ref{Fig:Relu} illustrates the distinction between the forward-pass ReLU layer and the contribution ReLU layer.
+
+\begin{figure}[ht!]
+	\centering
+	\includegraphics[width=1\linewidth]{Figures/ReLU.pdf}
+	\caption{Comparison between the forward-pass ReLU layer (left) and the contribution ReLU layer (right). The forward-pass ReLU layer clips all negative activations to zero, while the contribution ReLU layer evaluates and propagates both positive and negative contributions, providing insights into the influence of complex input features on the neural network's output.}
+	\label{Fig:Relu}
+\end{figure} 
+
+By comparing these two layers, one can observe the nuanced differences between a neuron's activation and its contribution. While activations are purely feed-forward and determined by the input values and weights, contributions reflect the broader context of how a specific feature influences the overall decision-making process of the neural network.
 
 This chapter outlines a set of rules for propagating activation from specific input regions through the hidden layers of the network, culminating in a singular \CTC\ value. The computation of a feature's \CTC\ value is facilitated by introducing the \emph{Contribution To a Neuron (\CTN)} value. This value represents the activation a neuron receives as a result of the feature during the forward pass, with the \CTC\ value of a feature being equivalent to the CTN value of the classification output neuron. This propagation of activation, which accounts for the feature's contribution during the forward pass, is distinct from a mere classification of the feature. This distinction is crucial due to the non-linear layers such as MaxPooling, which could otherwise pool the contribution of neurons not selected during the forward pass, compromising the explanation's faithfulness.
 
 
-There is an important differentiation between the \CTC\ value of a feature and its relevance. While current interpretability methods focus on the importance of a feature as part of the entire input considering the specific classification output (\ie feature relevance), the approach described in this chapter isolates the importance of the \textit{feature alone} during the forward pass (\ie feature's \CTC\/). Figure~\ref{fig:contribution} illustrates the distinction between a feature's relevance and its \CTC\ value using a specific input. When considering each pixel as a distinct feature, techniques like \LRP\ assign significant importance values within the context of the entire input. However, for an individual pixel, the \CTC\ value is generally insignificant, as no single pixel notably impacts the overall classification. In contrast, when assessing an amalgamation of simple features (pixels), or a complex feature, the \CTC\ value effectively demonstrates the contribution of the entire region to the classification through a heatmap. To enhance interpretability, complex features are presented in varying colours.
+There is an important differentiation between the \CTC\ value of a feature and its relevance. While current interpretability methods focus on the importance of a feature as part of the entire input considering the specific classification output (\ie feature relevance), the approach described in this chapter isolates the importance of the \textit{feature alone} during the forward pass (\ie feature's \CTC\/). Figure~\ref{fig:contribution} illustrates the distinction between a feature's relevance and its \CTC\ value using a specific input. When considering each pixel as a distinct feature, techniques like Layer-wise Relevance Propagation (\LRP\/) (see Chapter~\ref{sec:backprop}) assign significant importance values within the context of the entire input. However, for an individual pixel, the \CTC\ value is generally insignificant, as no single pixel notably impacts the overall classification. In contrast, when assessing an amalgamation of simple features (pixels), or a complex feature, the \CTC\ value effectively shows the contribution of the entire region to the classification through a heatmap. To enhance interpretability, complex features are presented in varying colours.
 
 
 % The chapter posits that the \CTC\ value provides a more useful explanation of a feature's importance to the classification than its relevance. In convolutional neural networks, while edges detected from the input are relevant for decision-making, their contribution to the classification can vary significantly. Relevance-based approaches may overestimate the importance of certain input parts, as they may not actively contribute much to the classification. This is particularly evident in deep convolutional neural networks with extensive convolutional layers, where almost all edges are likely to be deemed important. Figure~\ref{fig:guitar_dog} contrasts relevance-propagation methods with this contribution approach, highlighting the difference in the importance assigned to various input parts.
@@ -38,8 +79,8 @@ There is an important differentiation between the \CTC\ value of a feature and i
 
 \begin{figure}[h]
 \centering
-\includegraphics[width=\linewidth]{Figures/tiger_contribution.pdf}
-	\caption{ Illustration of the difference between contribution to classification and relevance on a pixel level. The explanations were computed on InceptionV3~\ref{szegedy2015rethinking} and the relevance heatmap is of LRP~\cite{bach2015pixel}}
+\includegraphics[width=\linewidth]{Figures/chimp_contributions.pdf}
+	\caption{ Illustration of the difference between contribution to classification and relevance on a pixel level. The explanations were computed on VGG16~\cite{szegedy2016rethinking} and the relevance heatmap is of LRP~\cite{bach2015pixel}}
 	\label{fig:contribution}
 \end{figure}
 
@@ -50,7 +91,6 @@ There is an important differentiation between the \CTC\ value of a feature and i
 % 	\caption{ \LRP\ identifies most of the edges in the image as relevant when explaining the ``Electric Guitar'' class including the head of the dog. In contrast, \REVEAL\ attributes only 0.73\% relevance to the head of the dog and 53\% relevance to the actual guitar.}
 % 	\label{fig:guitar_dog}
 % \end{figure}
-
 \section{Propagation Rules}
 
 This section defines a set of rules which allow for the contribution to be distributed layer by layer starting from the input layer until the output layer is reached. These rules differ from just performing a forward-pass on a complex input feature as they compute the activation that is a direct result of the presence of the complex input feature during the forward pass, as opposed to computing the activations that this complex input feature has by itself. Given the presence of different layer types, different contribution propagation rules must be defined which respect and reflect the underlying structure of the network and functions that comprise it.
@@ -61,7 +101,7 @@ The contribution of a region at the input layer 0 $\in \Lambda$ is the same as t
 \begin{equation*}
     \vec{c}_0 = \vec{a}_0 \odot \vec{m},
 \end{equation*}
-where $\vec{m}\in \{0,1\}^{n_0}$ is a mask over the region propagated as found by the method described in Section~\ref{chap:clustering}, and $\odot$ denotes element-wise multiplication operation. Performing the multiplication with the mask sets to zero all the activations of neurons that are not in the region of the feature that is being propagated. This allows only for the activations that are part of the complex input region to be propagated. 
+where $\vec{m}\in \{0,1\}^{n_0}$ is a mask over the region propagated as found by the method described in Section~\ref{chap:clustering}, and $\odot$ denotes element-wise multiplication operation and $\vec{a}_0$ are the pixel values of the three input channels in the first layer. Performing the multiplication with the mask sets to zero all the activations of neurons that are not in the region of the feature that is being propagated. This allows only for the activations that are part of the complex input region to be propagated. 
 
 \subsection{Masking After Each Layer}
 Only neurons that were active during the inference step should have contributions distributed to them during the feature contribution propagation. Thereby after each layer's function is performed, a mask $\vec{m}_k\in \{0,1\}^{n_k}$ is extracted over the activations values in $\vec{a}_k$, as follows 
@@ -77,7 +117,9 @@ for all $i \in \{1,\dots, n_k\}$, so that every position that had a non-zero val
     \label{masking}
         \vec{c}_k = \vec{c}_k\odot \vec{m}_k,
     \end{equation*}
-where $\vec{m_k}\in \{0,1\}^{n_k}$ is a mask over the activations values $\vec{a}_k$ in layer $\Lambda_k$. Note that neurons that were active during the classification but did not receive any contribution from the feature are still zero. The practice of distributing contributions only to neurons that were active during the inference step is not just a procedural detail, but a fundamental aspect of the feature contribution propagation process. Omitting this step could lead to inaccurate or misleading interpretations of a neuron's contribution to the final output. For instance, if contributions were assigned to inactive neurons, it would distort the understanding of how each feature influences the model's decision-making process. This could lead to erroneous conclusions, especially when analysing complex neural networks where the interplay of features and neurons is intricate.
+where $\vec{m_k}\in \{0,1\}^{n_k}$ is a mask over the activations values $\vec{a}_k$ in layer $\Lambda_k$. Note that neurons that were active during the classification but did not receive any contribution from the feature are still zero. An example of this rule being needed in the case of a ReLU layer, where no negative activations should be propagated, but one can have positive contribution attributed to a negative activation. This contribution should be set to zero as the activation is set to zero and not propagated forward. An example of that can be seen in Figure~\ref{Fig:Relu}.
+
+The practice of distributing contributions only to neurons that were active during the inference step is not just a procedural detail, but a fundamental aspect of the feature contribution propagation process. Omitting this step could lead to inaccurate or misleading interpretations of a neuron's contribution to the final output. For instance, if contributions were assigned to inactive neurons, it would distort the understanding of how each feature influences the model's decision-making process.
 
 
 \subsection{Dense Layer Rule}
@@ -85,24 +127,26 @@ The dense layer represented by a vector valued function $f_k: \bbR^{n_j}\to \bbR
 
 \subsubsection{Weighting the contribution}
 In the dense layer function, the first step involves the weighting of the activations that have reached the layer. Contribution refers to the amount of activation that is distributed from a specific region in the input space during the forward pass. Since weighting is a multiplicative operation, it proportionally scales each unit of activation relative to the weight. Thus, it is deemed sufficient for the contributions to be weighted in the same manner as the activations were during the forward pass, as detailed below:
-\begin{equation*}
+\begin{equation}
     \net^- = W_k [\vec{a}_j]_{j\passto k}\quad\mbox{and}\quad
    \cnet^- = W_k[\vec{c}_j]_{j\passto k},
-\end{equation*}
-where the left hand-side equation shows the weighting of the activation and the right hand-side one shows the weighting of the contribution.
+\label{eq:cnet}
+\end{equation}
+where the left hand-side equation shows the weighting of the activation $\net^-$ and the right hand-side one shows the weighting of the contribution $\cnet^-$.
 \subsubsection{Adding the bias}
 \label{section:adding_the_bias}
 To calculate the net value $\net$ during the forward pass a learned bias term $\vec{b}_k$ of the layer is added to the weighted sum $\net^-$. 
-The bias term holds a critical role in shaping the function learned by a neural network. During the backpropagation process not only does the bias influence the update of the weights, but the weight adjustments also affect the bias. This makes the bias an integral component of the neural network's learned function. Neglecting the bias during inference can lead to markedly different outputs. A striking example of this is illustrated in Figure~\ref{fig:bias_no_bias}, where the classification outcome for a guinea pig dramatically shifts from the most positive to the second most negative class simply due to the exclusion of biases. Moreover, the bias contributes to the model's ability to recognise patterns in data that don't centre around zero. It does this by inducing a learned shift in the activation function, either towards the positive or negative side. Omitting this shift can substantially alter the function of the neural network, underscoring the importance of the bias in its overall operation.
+The bias term holds a critical role in shaping the function learned by a neural network. During the backpropagation process not only does the bias influence the update of the weights, but the weight adjustments also affect the bias. This makes the bias an integral component of the neural network's learned function. Neglecting the bias during inference can lead to markedly different outputs. 
+% A striking example of this is illustrated by an experiment shown in Figure~\ref{fig:bias_no_bias}, where the classification outcome for a guinea pig dramatically shifts from the most positive to the second most negative class simply due to the exclusion of biases. Moreover, the bias contributes to the model's ability to recognise patterns in data that don't centre around zero. It does this by inducing a learned shift in the activation function, either towards the positive or negative side. Omitting this shift can substantially alter the function of the neural network, underscoring the importance of the bias in its overall operation.
 
-\begin{figure}[ht!]
-	\begin{center}
-		\includegraphics[width=\linewidth]{Figures/guini_without_bias.pdf}
-	\end{center}
-	\caption{The figure shows how the classification of an image can change completely when the learned bias in the network is removed. In this example it changes from the correctly classified guinea pig to a upright piano, which isn't present in the image. Guinea pig also becomes the second most negative classification, so the bias' effect on such image is difficult to be overstated.}
-	\label{fig:bias_no_bias}
-\end{figure} 
-\noindent
+% \begin{figure}[ht!]
+% 	\begin{center}
+% 		\includegraphics[width=\linewidth]{Figures/guini_without_bias.pdf}
+% 	\end{center}
+% 	\caption{The figure shows an experiment of how the classification of an image can change completely when the learned bias in the network is removed. This experiment was done on VGG16~\ref{SimonyanZ14a}. In this example it changes from the correctly classified guinea pig to a upright piano, which isn't present in the image. Guinea pig also becomes the second most negative classification, so the bias' effect on such image is difficult to be overstated.}
+% 	\label{fig:bias_no_bias}
+% \end{figure} 
+% \noindent
 
 When advancing the contribution forward, a straightforward approach is to add the bias as it is done in the forward pass. However, this method needs refinement, as the bias is calibrated for the contribution from the entire input space, not just a single feature. This mismatch can lead to two issues:
 \begin{enumerate}
@@ -110,22 +154,26 @@ When advancing the contribution forward, a straightforward approach is to add th
     \item Conversely, if the contribution from a single neuron is much larger than it was during the forward pass (perhaps due to the absence of input regions that are irrelevant or negatively contributing), the original bias might not adequately adjust the mean as it did during the forward pass.
 \end{enumerate}
 
-
-The bias is originally tuned to work within a specific range of values. In the first scenario, adding the same bias term can excessively influence the output, as demonstrated in Figure~\ref{fig:Neurons_with_bias}~A, where the relevance is a fraction of the activation. In the second scenario, illustrated in Figure~\ref{fig:Neurons_with_bias}~B, the relevance exceeds the activation. Here, adding the bias of 0.5 results in an output minimally affected by the bias, contrasting with its more significant role during the forward pass. These examples highlight the need for a nuanced approach to incorporating the bias when propagating contributions.
-
 \begin{figure}[ht!]
 	\begin{center}
-		\includegraphics[width=0.6\linewidth]{Figures/AandB.png}
+		\includegraphics[width=0.8\linewidth]{Figures/AandB.png}
 	\end{center}
 	\caption{(A) illustration of the effect of the bias when the contribution of an input region with respect to a particular neuron is a very small fraction of the the entire input's contribution. (B) illustration of the converse effect, where the contribution of a single neuron might be far greater than the entire input' contribution.}
 	\label{fig:Neurons_with_bias}
 \end{figure} 
-To address these issues, it's essential to apply a proportional amount of the bias, ensuring it neither overwhelms nor under-represents the relevance being propagated. The proportion of the bias to be added to the scaled contributions is defined by a matrix $P_{k}$ that when multiplied with the original bias $\vec{b}_k$ yields an adjusted bias matrix. The exact way $P_{k}$ is defined can be seen in Section~\ref{sec:scale}, which presents a discussion of how the relevance signal can be preserved when dealing with learned network parameters. Given that the method proposed in this chapter involves propagating only a portion of the input through the network, maintaining the integrity and the influence of this small subset of activations, without it getting diluted or lost presents a significant challenge. This general way of adjustment can be formulated as:
+
+The bias is originally tuned to work within a specific range of values. In the first scenario, adding the same bias term can excessively influence the output, as illustrated in Figure~\ref{fig:Neurons_with_bias}~A, where the relevance is a fraction of the activation. In the second scenario, illustrated in Figure~\ref{fig:Neurons_with_bias}~B, the relevance exceeds the activation. Here, adding the bias of 0.5 results in an output minimally affected by the bias, contrasting with its more significant role during the forward pass. These examples highlight the need for a nuanced approach to incorporating the bias when propagating contributions.
+
+Given that the \CTC\/ method proposed in this chapter involves propagating only a portion of the input (\ie the complex input feature) through the network, maintaining the integrity and the influence of this small subset of activations, without it getting diluted or lost presents a significant challenge. This general way of adjustment can be formulated as:
 \begin{equation}
-   \vec{c}_k  = W_k \vec{c_j} +  P_{k}{b}_k.
+   \vec{c}_k  = \cnet^- +  P_{k}{b}_k.
+\label{eq:ck} 
 \end{equation} 
+
+where the proportion of the bias ${b}_k$ to be added to the scaled contributions $\cnet^-$ is defined by a matrix $P_{k}$ that when multiplied with the original bias $\vec{b}_k$ yields an adjusted bias matrix~\footnote{The exact way $P_{k}$ is defined can be seen in Section~\ref{sec:scale}, which presents a discussion of how the relevance signal can be preserved when dealing with learned network parameters.}
+
 \subsection{Convolutional Layer Rules}
-Convolutional layers comprise of multiple operations stacked after one another. Suppose that $k\in \Lambda$ is an convolutional layer with $f_k$ of the form $f_k(\vec{x})=\act(W_k\ast\vec{x} + \vec{b}_k)$, for some matrix kernel $W_k:\bbR^{d_k\times d_k'}$, some vector of biases $\vec{b}_k\in \bbR^{m_k}$, and some (component-wise) activation function $\act:\bbR^{m_k}\to \bbR^{m_k}$. 
+Convolutional layers comprise of multiple operations stacked after one another. Suppose that $k\in \Lambda$ is an convolutional layer with $f_k$ of the form $f_k(\vec{x})=\act(W_k\ast\vec{x} + \vec{b}_k)$, for some matrix kernel $W_k:\bbR^{d_k\times d_k'}$, some vector of biases $\vec{b}_k\in \bbR^{m_k}$, and some (component-wise) activation function $\act:\bbR^{m_k}\to \bbR^{m_k}$, such as a ReLU, Sigmoid, Hyperbolic Tangent or any activation function that may be used in a given neural network.
 
 \subsubsection{Weighting the contribution}
 First the convolutional layer divides the input data into smaller regions called \emph{local receptive fields}. Each receptive field corresponds to one element or a small neighbourhood of elements in the input data. Next the convolution operation is performed by sliding the filters over the input data, applying element-wise multiplication between the filter and the receptive field, and summing up the results. This produces a single value, which represents the activation of a neuron in this resulting layer. This process is repeated for each location from the input to the layer, which helps in capturing the same features regardless of their location (see Section~\ref{sec:conv}).
@@ -135,14 +183,16 @@ weighted in the same way as activations were during the forward pass. As detaile
 \begin{equation}
     \net^- = W_k\ast[\vec{a}_j]_{j\passto k}\quad\mbox{and}\quad
    \cnet^- = W_k\ast[\vec{c}_j]_{j\passto k},
+\label{eq:conv_cnet}   
 \end{equation}
-where the left hand-side equation shows the weighting of the activation and the right hand-side one shows the weighting of the contribution.
+where the left hand-side equation shows the weighting of the activation $\net^-$ and the right hand-side one shows the weighting of the contribution $\cnet^-$.
 \subsubsection{Adding the Bias}
 
-The bias vector \(\vec{b}_k \in \bbR^{m_k}\) is added to the output of the convolution operation. The process enhances the layer’s ability to learn patterns in data and adjust its activation function appropriately. Adding bias in a convolutional layer is crucial as it allows the network to adjust the output of the layer independently of its inputs. This is particularly useful in cases where the data should not centre around zero, as it helps in shifting the activation function. This general way of adjusting the biases in convolutional layers can be mathematically formulated as:
+The bias vector \(\vec{b}_k \in \bbR^{m_k}\) is added to the output of the convolution operation. The process enhances the layer’s ability to learn patterns in data and adjust its activation function appropriately. Adding bias in a convolutional layer is crucial as it allows the network to adjust the output of the layer independently of its inputs. This is particularly useful in cases where the data should not centre around zero, as it helps in shifting the activation function. This general way of adjusting the biases in convolutional layers is expressed as:
 \begin{equation}
-   \vec{c}_k =\cnet^- +  P_{k}{b}_k.
+   \vec{c}_k =\cnet^- +  P_{k}{b}_k, 
 \end{equation} 
+which is the same in Equation~\ref{eq:ck}.
 \subsubsection{Activation}
 The convolutional layer often has an activation function as its last operation. If the function is ReLU it is bypassed by the contribution rules. This allows for negative relevances to pass through and accurately show that a complex input feature had a negative relevance on a neuron that had an overall positive activation. Note that the masking after each layers ensures that relevances assigned to non-active neurons during the forward pass are assigned zero.  
 
@@ -164,7 +214,7 @@ The resulting vector, \(\vec{c_j}^\prime\), contains contribution values for the
 
 \subsubsection{Pooling the Relevance Values at the Maximally Activated Neurons During Inference}
 
-When assessing the new contribution vector \(\vec{c_j}^\prime\), if all contributions are positive, determining the most significant contributions becomes straightforward. This involves performing a max pooling operation on \(\vec{c_j}^\prime\), wherein the largest values indicate the most significant contributions of the pooled neurons. However, it's important to note that a region's contribution to a neuron can be negative, even if that neuron was maximally active when considering the entire input. To pool the relevances no matter whether they are positive or negative one can perform the max pooling operation on the absolute values of the $\vec{c_j}^\prime$ vector 
+When assessing the new contribution vector \(\vec{c_j}^\prime\), if all contributions are positive, determining the most significant contributions becomes straightforward. This involves performing a max pooling operation on \(\vec{c_j}^\prime\), wherein the largest values indicate the most significant contributions of the pooled neurons. However, it is important to note that a region's contribution to a neuron can be negative, even if that neuron was maximally active when considering the entire input. To pool the relevances no matter whether they are positive or negative one can perform the max pooling operation on the absolute values of the $\vec{c_j}^\prime$ vector 
 \begin{equation}
     \label{pool}
     \vec{c_{k}}^- = f_{k}(||\vec{c_j}^\prime||)
@@ -223,7 +273,7 @@ As batch normalisation does not alter the contribution of features but just shif
 
 \subsection{Concatenation \& Average Pooling Layers}
 
-There are two types of layer that we have yet to consider: concatenation layers and average pooling layers. Both the concatenation layer and average pooling layer perform functions that are not influence by the input. Therefore the functions for distributing the contribution forward is exactly the same as during the forward pass, where the activation is distributed. Each concatenations layer $k\in \Lambda$ is given by a function, where $a_k = f_k\big([\vec{a}_j]_{j\passto k}\big) = [\vec{a}_j]_{j\passto k}$. 
+There are two types of layer to be considered: concatenation layers and average pooling layers. Both the concatenation layer and average pooling layer perform functions that do not influence by the input. Therefore the functions for distributing the contribution forward is exactly the same as during the forward pass, where the activation is distributed. Each concatenations layer $k\in \Lambda$ is given by a function, where $a_k = f_k\big([\vec{a}_j]_{j\passto k}\big) = [\vec{a}_j]_{j\passto k}$. 
 
 Therefore, it is sufficient to take the contribution of layer $k$ to be the concatenation of the contributions of the same collection of layers $j\in \Lambda$ such that $j\passto k$: 
 \begin{equation*}
@@ -250,14 +300,13 @@ What all of these learned parameters have in common is that they represent a shi
 \subsection{Naïve Weighting of The Learned Parameters}
 \label{naive}
 
-A naïve approach to define $P_{k}$ is as an element-wise absolute ratio between the relevances and the activations. In the case of dense layers this is defined as a ratio between the elements of the weighted sum of the contribution matrix and the weighted sum of the activation matrix.
+A naïve approach to define $P_{k}$ is as an element-wise absolute ratio between the relevances and the activations. As defined by
 \begin{equation*}
-    P_{k} = \dfrac{\vec{W_k(j)}\,[c_j(i)]_{j\passto k}}{\vec{W_k(j)}\,[a_j(i)]_{j\passto k}}
+    P_{k} = \dfrac{\cnet^-}{\net^-} ,
 \end{equation*}
-In the case of convolutional layers it represents the ratio between the contribution element after the convolution operation and the activation elements after the convolution operation. Defined as:
-\begin{equation*}
-    P_{k} = \dfrac{\vec{W_k(j)}\ast\,[c_j(i)]_{j\passto k}}{\vec{W_k(j)} \ast \,[a_j(i)]_{j\passto k}}
-\end{equation*}
+where in the case of dense layers this is defined as a ratio between the elements of the weighted sum of the contribution matrix $\cnet^- =\vec{W_k(j)}\,[c_j(i)]_{j\passto k}$ and the weighted sum of the activation matrix $\net^- = \vec{W_k(j)}\,[a_j(i)]_{j\passto k}$ as in Equation~\ref{eq:cnet}. In the case of convolutional layers it represents the ratio between the contribution element after the convolution operation $\cnet^- =\vec{W_k(j)}\ast\,[c_j(i)]_{j\passto k}$
+and the activation elements after the convolution operation $\net^- = \vec{W_k(j)} \ast \,[a_j(i)]_{j\passto k}$ as in Equation~\ref{eq:conv_cnet}. 
+
 Using this definition of the ratio has the same effect as calculating the bias per unit of activation and then multiplying that by the amount of contributions in the region.
 
 \begin{equation*}
@@ -292,7 +341,7 @@ The learned parameter is scaled through the scaling matrix \(P_{k}\), so one nee
 \begin{equation*}
     Q_{k} = \dfrac{\vec{a_k}}{\mu_{a_k}},
 \end{equation*}
-where $\vec{a_k}$ is the activation output vector (\ie after the learned parameter is added or subtracted). This ratio captures the variability of the activation's output. When \( P_{k} \) is multiplied by the learned parameters, the resulting values should have a magnitude deviation that is no greater than when the ratio $Q_{k}$ is multiplied with the mean of the activation output. Therefore, \( Q_{k} \) serves as a benchmark for determining how much the learned parameter, once scaled by \( P_{k} \), can deviate in magnitude. This constraint ensures that the scaling process does not introduce disproportionate amplification or reduction of the learned parameters, which could otherwise lead to an unfaithful explanation. The key idea here is to ensure that the magnitude deviation of the learned parameters, after being scaled, does not exceed the magnitude deviation of the layer's outputs. This is crucial because it aligns the influence of the learned parameters with the natural scale of the network's activations, thus maintaining a balanced and stable operation of the network.
+where $\vec{a_k}$ is the activation output vector (\ie after the learned parameter is added or subtracted) and $\mu_{a_k}$ is the mean of the $\vec{a_k}$ activation output vector. This ratio captures the variability of the activation's output. When \( P_{k} \) is multiplied by the learned parameters, the resulting values should have a magnitude deviation that is no greater than when the ratio $Q_{k}$ is multiplied with the mean of the activation output. Therefore, \( Q_{k} \) serves as a benchmark for determining how much the learned parameter, once scaled by \( P_{k} \), can deviate in magnitude. This constraint ensures that the scaling process does not introduce disproportionate amplification or reduction of the learned parameters, which could otherwise lead to an unfaithful explanation. The key idea here is to ensure that the magnitude deviation of the learned parameters, after being scaled, does not exceed the magnitude deviation of the layer's outputs. This is crucial because it aligns the influence of the learned parameters with the natural scale of the network's activations, thus maintaining a balanced and stable operation of the network.
 
 
 It is important to note that scaling the standard deviation of the magnitudes of the \(P_{k}\) matrix to match the standard deviation of the magnitudes of the $Q_{k}$ matrix is not the same as transforming the \(P_{k}\) distribution to match the $Q_{k}$, as that would limit the magnitude of \(P_{k}\) from becoming exponentially large, but would not limit the magnitude of \(P_{k}\) from becoming exponentially small. 
@@ -350,7 +399,7 @@ Illustrated in Figure~\ref{fig:scaled}, the logarithmic scale of ratios after ad
 	\begin{center}
 		\includegraphics[width=\linewidth]{Figures/Logarithms_of_the_ratios_scaled.pdf}
 	\end{center}
-	\caption{The logarithmic scale comparison of maximum and minimum ratio values in VGG16 neural network layers after \(P_{k}^\prime\) adjustment. While maintaining the signal, this Figure mirrors the shape of the unbounded signal of Figure~\ref{fig:exponential}  but on a significantly smaller scale.}
+	\caption{The logarithmic scale comparison of maximum and minimum ratio values in VGG16 neural network layers after \(P_{k}^\prime\) adjustment. While maintaining the signal, it mirrors the shape of the unbounded signal of Figure~\ref{fig:exponential}  but on a significantly smaller scale.}
 	\label{fig:scaled}
 \end{figure}
 
@@ -358,8 +407,356 @@ Thus, this approach enables a more measured and balanced integration of learned 
 
 The rule described in this section for scaling the learned parameters is a result of taking a ratio between the relevances and the activations. In the cases where either the relevances or the activations are very small, round-off error can occur due to the inherent limitations of computers in representing decimal numbers. This rounding can lead to small inaccuracies in calculations. These errors accumulate over successive computational steps (similar to how the the ratio can become exponentially small or big as discussed in Chapter~\ref{sec:parallels}), sometimes significantly impacting the final result. To remedy this in the implementation of forward pass retracing the activation and relevance are quantised before the ratio is taken so that such errors are minimised. The quantised activation and relevance are only used for the computation of the ratio and therefore this does not effect the overall contribution of features and the methods accuracy.
 
+
+\section{Results}
+\label{sec:results}
+
+This section presents the results VGG16~\cite{SimonyanZ14a}, VGG19~\cite{SimonyanZ14a}, ResNet50~\cite{he2015deep}, DenseNet121~\cite{huang2018densely} and InceptionV3~\cite{szegedy2015rethinking} and the evaluation is based on the widely recognised ImageNet Large Scale Visual Recognition Challenge 2012 (ILSVRC 2012) dataset~\cite{ILSVRC15}, which has been used in training these models. To facilitate a standardised and consistent analysis, the \CTC\/ method described in this chapter is implemented as part of the iNNvestigate framework~\cite{inn}, which provides a common interface and out-of-the-box implementation for many analysis methods. This choice not only streamlines the evaluation process but also allows for a comparative analysis with the leading interpretability methods in the field.
+
+
+To test if the \CTC\/ method provides an interpretable explanations with high fidelity, the explanations are evaluated both qualitatively and quantitatively. In line with standard practices~\cite{SundararajanTY17, ShrikumarGK17, SelvarajuCDVPB20, SmilkovTKVW17, AnconaCO018, kindermans2017learning} the qualitative analysis compares the \CTC\ method's contribution to classification against established attribution methods, including Input$\times$Gradient~\cite{SimonyanVZ13}, DeconvNet~\cite{ZeilerKTF10}, Guided BackProp~\cite{SpringenbergDBR14}, and LRP-$\alpha_1\beta_0$~\cite{bach2015pixel}. Arguably, showing the single value of \CTC\ makes the comparison between different features and models easier (corroborating results reported in \cite{Ribeiro0G16}). The methodology through which the method was evaluated involved applying the \CTC\ method and the established attribution methods to a diverse set of input images processed by various neural network architectures~\cite{SimonyanZ14a, SimonyanZ14a, he2015deep, huang2018densely, szegedy2015rethinking} and compare the visual explanations generated by each method for both correctly and incorrectly classified examples.
+
+The quantitative analysis is essential to ascertain the relative standing of the \CTC\ method in the context of existing literature, particularly focusing on key interpretability properties such as input invariance and sensitivity, as detailed in Section~\ref{lit:discussion}. The evaluation of these interpretability properties is done by employing fidelity metrics to assess the accuracy of the explainability model. This ensures that the resulting method is not only more interpretable due to the reduced information shown to the user, but also retained the faithfulness of state of the art models.
+
+
+\subsection{Qualitative Results}
+\label{sec:qualitative}
+
+Unique to the approach of selecting complex input features is the visualisation technique employed. It diverges from traditional heatmaps that use seismic colour patterns to represent relevance. Instead, the explanations are assigned a distinct colour to each complex feature's pixels. These colours are then reflected in a colour-coded legend adjacent to the heatmap, clearly illustrating the \CTC\ values and offering a more intuitive understanding of the model's decision-making process.
+
+As the \CTC\ value is assigned to a complex input feature rather than on a pixel level like in other relevance methods, different ways by which the complex input feature is selected can lead to different results. This chapter selecting the top features by size rather thaN selecting the top features by the amount of relevance they have received (as described in Chapter~\ref{chap:clustering}). Selecting features by size does not rely on any relevance distribution method to select it is features, making it a more independent evaluation and a fair comparison to other methods in the literature.
+
+\subsection{CTC Evaluated Against Different Post-hoc Explanation Methods}
+
+\subsubsection{Correctly Classified Examples}
+\label{sec:correct}
+
+Figure~\ref{Fig:vgg16_correct} provides five examples classified on VGG16~\cite{SimonyanZ14a} and compares the explanations provided by \CTC\ with Input$\times$Gradient~\cite{SimonyanVZ13}, Integrated Gradients~\cite{SundararajanTY17}, DeconvNet~\cite{ZeilerKTF10}, and LRP-$\alpha_1\beta_0$~\cite{bach2015pixel}. Each column presents the visualized results for different explainability methods, while each row corresponds to analyses for a specific input sample. To the right of the \CTC\ method, numerical values indicate the contribution of the most prominent objects in the input.
+
+\begin{figure}[ht!]
+	\begin{center}
+		\includegraphics[width=0.95\linewidth]{Figures/vgg16_correct.pdf}
+	\end{center}
+	\caption{Comparison of visual explanations for correctly classified examples using different explainability methods. The \CTC\ method stands out by providing clear, segmented visualizations of the most relevant features for the model's predictions, along with numerical values that quantify the importance of individual features.}
+	\label{Fig:vgg16_correct}
+\end{figure}
+
+The primary advantage of the \CTC\ method lies in its ability to assign a clear, singular contribution value to the most significant features. Unlike traditional explainability methods, which often produce noisy or diffuse visual explanations, \CTC\ delivers a focused and interpretable perspective on the features deemed most critical by the model. Furthermore, \CTC\ provides a distinct ordering of features with associated numerical values, enabling a more detailed understanding of feature importance.
+
+For instance, in the Saluki image (second example), the dog's body is assigned the highest contribution score of 13.15 (relative to the classification score of 20.81). The second-highest contribution, the toy bear’s ear, is much lower at 3.31, reflecting an importance nearly four times smaller than the dog. The rest of the bear, as well as the background, exhibit negligible importance with scores as low as 0.13. Similarly, in the Alp scene (fifth example), the snow and mountain ranges are assigned equally high relevance scores of around 4-5 (relative to the classification score of 15.626), contributing significantly to the classification, while features such as the pants and jacket of one skier are far less important with scores around 1.
+
+The \CTC\ method excels in providing a segmented visualization of the key regions contributing to the model's predictions. For example, in the Chimpanzee image, \CTC\ clearly highlights the chimpanzee, the piano, and even the chairs in the background. In the Saluki image, the method successfully identifies the dog, the toy bear, and the blanket as relevant features. In contrast, other methods such as Input$\times$Gradient and DeconvNet produce noisy and less interpretable results, failing to distinctly localize features that contribute to the model's decision.
+
+Although Guided Backpropagation and \LRP\ improve upon Input$\times$Gradient and DeconvNet by capturing edges and shapes, they lack contextual understanding and proper importance weighting. For instance, in the Saluki image, \LRP\ highlights all edges indiscriminately, making it unclear how the dog compares to the background or the toy in terms of importance. Similarly, in the Crib example, while Guided Backpropagation and \LRP\ successfully highlight relevant areas, they fail to provide a clear segmentation or quantitative breakdown of feature importance.
+
+\subsubsection{Incorrectly Classified Examples}
+
+Figure~\ref{Fig:vgg16_incorrect} showcases five examples that were misclassified by VGG16. The figure contrasts how different explainability methods—Input$\times$Gradient, Integrated Gradients, DeconvNet, LRP-$\alpha_1\beta_0$, and \CTC—attribute relevance to features in these examples.
+
+\begin{figure}[ht!] 
+\begin{center} 
+\includegraphics[width=0.95\linewidth]{Figures/vgg16_incorrect.pdf} \end{center} 
+\caption{Comparison of visual explanations for incorrectly classified examples by VGG16~\cite{SimonyanZ14a}. The figure highlights how \CTC\ provides clearer insights into the features driving misclassifications compared to other methods} 
+\label{Fig:vgg16_incorrect}
+\end{figure}
+
+The first example depicts a grasshopper on a small red fruit. The classifier incorrectly identifies the image as a rose hip (a red/black fruit), rather than the insect itself.  Input$\times$Gradient and DeconvNet have noisy relevance distributed along the input. Giuded Propagation and LRP in contrast primarily focus on the head of the insect with a diffuse and blurry relevance across the rest of the image. These methods largely ignore the fruit beneath the insect, which likely contributed to the model’s misclassification. In contrast, \CTC\ identifies the fruit as the dominant contributor, assigning it a relevance score of 9 out of 11.031, with additional relevance to the surrounding fruits in the background.
+
+Established methods often struggle to assign relevance to background features, instead favouring the central object and its edges. This limitation becomes particularly evident in examples where the classifier's decision is driven by the background rather than the central object. For instance, in the fourth example (a swimmer next to a pool, misclassified as a ballplayer), \LRP\ spreads relevance indiscriminately across the majority of edges in the image, including the swimmer and surrounding environment. However, \CTC\ identifies the grass as the most relevant features contributing to the misclassification with a score of 7.97 out of the classification score of 9.780. This suggests that the model may have incorrectly associated the grassy background with a sports context, such as a ball game.
+
+In another example, a framed car (third input) is misclassified by VGG16 as a monitor. Guided Backpropagation and \LRP\ highlight most of the edges in the image, particularly those of the car, without providing a clear explanation of why the model arrived at this decision. By contrast, \CTC\ identifies the frame as the most significant feature, correctly revealing that the model's misclassification likely stemmed from the visual similarity between the car frame and a monitor bezel.
+
+The final input image depicts a person standing near a set of pillars but is misclassified as a banister. Guided Backpropagation and \LRP\ once again attribute relevance to nearly all detectable edges, including the person in the foreground and the pillars in the background. This broad attribution fails to clarify the cause of the misclassification. In contrast, \CTC\ assigns four times higher relevance to the pillars in the background than any other object.
+
+Arguably, \CTC\ not only simplifies the interpretation process but also provides a more precise and meaningful representation of what the model deems important for classification. In contrast, earlier methods, while progressively reducing noise in their visual explanations, often overemphasize the significance of edges in the classification process. Since convolutional layers inherently detect most (if not all) edges in an image, it is natural for these edges to be marked as relevant by these methods. However, this approach often fails to discern which features are genuinely critical to the classification decision versus those that are merely detectable. In contrast, \CTC\ delineates a more nuanced and accurate landscape of feature importance by identifying which features truly drive the classification, avoiding an over-generalized attribution of relevance to all detectable features.
+
+\begin{figure}[ht!]
+	\begin{center}
+		\includegraphics[width=1\linewidth]{Figures/busy_results.pdf}
+	\end{center}
+	\caption{Analysis regarding the predicted class by VGG19~\cite{SimonyanZ14a} as computed by the selected analysers. The example chosen are very busy scenes, where the method can provide significant benefit.}
+	\label{Fig:busy}
+\end{figure} 
+
+Figure~\ref{Fig:busy} illustrates additional examples of highly complex, cluttered scenes in which traditional explainability methods (Input x Gradient, DeconvNet, SmoothGrad, Guided Backpropagation, and LRP) produce explanations that highlight numerous regions across the input, making it challenging to interpret the model's focus or prioritize the relevance of specific features. These methods distribute importance broadly, resulting in visualizations that lack clarity and fail to provide meaningful insights into what the classifier deems most important.
+
+In stark contrast, the \CTC\/ method stands out by delivering precise and easily interpretable results. \CTC\/ assigns clear and hierarchical importance to objects within the scene, visualizing the magnitude of relevance for different areas or objects. For instance, in the pillow example, \CTC\/ distinctly emphasizes key areas with a well-ordered hierarchy of relevance, where the pillow itself is 10 times more important than anything else in the scene, while other methods scatter importance across the entire image. Similarly, for the cab, harp, shoe shop, and crane examples, \CTC\/ consistently demonstrates its ability to isolate and prioritize critical regions, avoiding the overwhelming and indiscriminate attributions observed in other methods.
+
+\subsection{\CTC\/ Evaluated on Different Networks}
+
+The following subsections evaluate the performance of Input$\times$Gradient, DeconvNet, LRP-$\alpha_1\beta_0$ and \CTC\/ in showing the difference in what is found important between different network given the same input. This section shows the scalability and adaptability of the \CTC\/ method across a range of neural network architectures. The diversity in architectural design, exemplified by models such as VGG16~\cite{SimonyanZ14a}, VGG19~\cite{SimonyanZ14a}, ResNet50~\cite{he2015deep}, DenseNet121~\cite{huang2018densely}, and InceptionV3~\cite{szegedy2015rethinking}, presents unique challenges to explainability methods. The goal is to understand how the \CTC\/ method performs in different architectural contexts, considering the inherent design and operational differences of these networks. 
+
+\subsubsection{Correctly Classified Examples}
+
+This section evaluates the ability of various explainability methods to reveal what each network identifies as relevant features. By comparing these methods, the aim is to demonstrate whether \CTC\/ offers a clearer and more accurate representation of feature importance. To illustrate this, the first three inputs from Figure~\ref{Fig:vgg16_incorrect} were used as examples.
+
+\begin{figure}[ht!]
+	\begin{center}
+		\includegraphics[width=0.95\linewidth]{Figures/all_networks_correct_1.pdf}
+	\end{center}
+	\caption{While Input$\times$Gradient, DeconvNet, and Guided Backpropagation highlight similar regions across networks, \LRP\ varies significantly between models. In contrast, \CTC\/ consistently identifies the chimpanzee as the most relevant feature across all networks, demonstrating its clarity and consistency.}
+	\label{Fig:compare_models_same_1}
+\end{figure} 
+
+Figure~\ref{Fig:compare_models_same_1} highlights a chimpanzee playing a piano. Methods such as Input$\times$Gradient, DeconvNet, and Guided Backpropagation consistently highlight the same regions of the image across all networks. In contrast, \LRP\/ shows variability: for VGG16 and VGG19, it identifies nearly all edges of the chimpanzee and piano as relevant, emphasizing the chimpanzee. For ResNet50, \LRP\/ produces sparse relevance, while for InceptionV3 and DenseNet121, it marks the piano as highly relevant.
+
+In comparison, \CTC\/ assigns significantly higher relevance to the chimpanzee—at least three times more than any other feature—across all networks. Moreover, \CTC\/ maintains a similar ranking and importance for other features consistently. Notably, the clusters remain consistent across all networks, except for InceptionV3, which uses 299x299 input dimensions compared to 224x224 for the other networks.
+
+
+
+\begin{figure}[ht!]
+	\begin{center}
+		\includegraphics[width=0.85\linewidth]{Figures/all_networks_correct_2.pdf}
+	\end{center}
+	\caption{Visualization of relevance attribution across models and explanation methods for a dog and snowmobile, highlighting variations in focus and consistency.}
+	\label{Fig:compare_models_same_2}
+\end{figure} 
+
+Figure~\ref{Fig:compare_models_same_2} illustrates the next two examples from Figure~\ref{Fig:vgg16_correct}—a dog and a snowmobile—analyzed across different neural networks. Both for the dog and snowmobile example, Input$\times$Gradient and DeconvNet produce similar heatmaps across all networks, though their explanations remain noisy.
+
+In the dog example, Guided Backpropagation consistently identifies the dog as the most relevant feature, with a particular focus on its eyes, which is especially pronounced in ResNet50, DenseNet121, and InceptionV3. In contrast, \LRP\/ assigns importance to both the dog and the bear in VGG16 and VGG19, while providing unclear, noisy explanations in ResNet50. For InceptionV3 and DenseNet121, \LRP\/ shifts relevance predominantly to the dog's eyes. The \CTC\/ method finds the dog over four times more relevant than the bear in VGG16, VGG19, and ResNet50, and nearly twice as relevant in DenseNet121. However, in InceptionV3, the bear is deemed twice as relevant as the dog, which may reflect a limitation of the \CTC\/ method. This discrepancy could also be attributed to InceptionV3’s tendency to memorize training data due to its wide architecture \cite{nguyen2020wide}. Further, both Guided Backpropagation and \LRP\/ consistently highlight the dog’s eyes as important, and no \CTC\/ cluster contain the eyes, which may change the relevance of the dog cluster. 
+
+In the snowmobile example, Guided Backpropagation and \LRP\ both assign relevance to the person, the snowmobile, and the surrounding snow tracks and trees, though the emphasis varies by model. ResNet50 prioritizes the person more than the snowmobile, whereas InceptionV3 focuses predominantly on the snowmobile. DenseNet121, on the other hand, distributes relevance more evenly between the edges of the person, the snowmobile, and the surrounding trees. Unlike these methods, \CTC\/ assigns primary importance to the snow itself, especially in cases where Guided Backpropagation and \LRP\ focus on edges. As discussed in Section~\ref{sec:correct}, Guided Backpropagation and \LRP\/ struggle to assign relevance to background elements effectively. By prioritizing edges, these methods can mislead interpreters into believing that the highlighted object is the key factor in the input, when in reality, the relevance might lie in the background or other contextual features. While the correct answer is unknown in this instance, it is plausible that the snow is the decisive feature driving the classification. Notably, in InceptionV3, all three methods—Guided Backpropagation, \LRP\/, and \CTC\/—consistently identify the snowmobile as the most important feature for classification.
+
+
+\subsubsection{Incorrectly Classified Examples}
+
+This section examines how various explainability methods perform in identifying relevant features for incorrectly classified examples. By analysing cases where networks fail to make the correct prediction, the aim to uncover potential biases or limitations in the models’ reasoning processes and assess the reliability of the explainability methods in these challenging scenarios. Specifically, this section explores whether \CTC\/ can provide more insightful and interpretable explanations in instances where other methods might generate noisy or misleading relevance maps. 
+
+To illustrate this, three examples of misclassifications were examined further from Figure~\ref{Fig:vgg16_incorrect}, comparing how each method highlights features across different networks. By focusing on these challenging cases, the aim is to better understand the strengths and weaknesses of each explainability method and highlight the role of \CTC\/ in providing more consistent and interpretable insights.
+
+
+\begin{figure}[ht!]
+	\begin{center}
+		\includegraphics[width=1\linewidth]{Figures/all_networks_incorrect_1.pdf}
+	\end{center}
+	\caption{Analysis regarding the actually predicted class by different classifier as computed by the selected analysers.}
+	\label{Fig:compare_models_same_missclassified_1}
+\end{figure} 
+
+The first example is the misclassified grasshopper shown in Figure~\ref{Fig:compare_models_same_missclassified_1}, which originates from Figure~\ref{Fig:vgg16_incorrect}. The input image features a grasshopper perched on top of red, green, and black fruit. VGG16 and VGG19 misclassify the image as a rose hip, likely influenced by the fruit’s resemblance to a rose hip. ResNet50 and InceptionV3, on the other hand, correctly classify the image as a grasshopper, while DenseNet121 misclassifies it as a cricket. Despite these varying classifications across networks, Input$\times$Gradient and DeconvNet generate similar heatmaps with consistently noisy explanations across all networks.
+
+Guided Backpropagation highlights the grasshopper’s head as the most relevant feature in all networks. However, in VGG16 and VGG19, it also assigns some relevance to the fruit, though this is not the primary focus. A similar pattern is observed in \LRP\/, where VGG16 and VGG19 attribute some importance to the fruit while primarily focusing on the grasshopper’s head. For ResNet50, \LRP\ produces a relatively noisy explanation but still emphasizes the head of the grasshopper. On InceptionV3, \LRP\ generates an almost empty explanation, while for DenseNet121, the grasshopper's head is again identified as the most relevant feature.
+
+In contrast to these methods, \CTC\/ assigns the most significant relevance to the fruit for VGG16 and VGG19, reflecting its likely contribution to the networks’ misclassification as a rose hip. For VGG16, the fruit is assigned relevance scores of 9.24 in the foreground and 9.088 in the background, given the total classification score of 14.983 for a rose hop. Similarly, for VGG19, the fruit scores 8.48 in the foreground and 4.79 in the background, with a classification score of 11.031 for rose hop. In both cases, the grasshopper receives far less relevance, with scores of 3.04 and 3.19 respectively—less than half of the fruit's assigned importance.
+
+In contrast, in the networks that correctly classify the insect (ResNet50 and InceptionV3) or misclassify it as another insect (DenseNet121), \CTC\/ assigns the highest relevance to the grasshopper itself, reflecting the networks’ focus on the insect as the primary object in the image. This highlights \CTC\/’s capacity to align relevance attribution with the networks’ specific classification outcomes arguably better than other methods.
+
+Figure~\ref{Fig:compare_models_same_missclassified_2} shows the next two examples from Figure~\ref{Fig:vgg16_incorrect} of a water buffalo and pickup truck. Similarly to all previous examples Input$\times$Gradient and DeconvNet generate similar heatmaps across networks. Input$\times$Gradient in the water buffalo case focuses on the animal and in the truck input they focus on the truck. DeconvNet produces very noisy explanations for all of them. 
+
+\begin{figure}[ht!]
+	\begin{center}
+		\includegraphics[width=0.85\linewidth]{Figures/all_networks_incorrect_2.pdf}
+	\end{center}
+	\caption{Analysis regarding the actually predicted class by different classifier as computed by the selected analysers.}
+	\label{Fig:compare_models_same_missclassified_2}
+\end{figure} 
+
+In the water buffalo example, both guided backpropagation and \LRP\ consistently highlight only the animal as relevant, regardless of the network used. Despite differences in classification across networks, the explanations remain unchanged. In contrast, \CTC\/ produces notably distinct explanations for different networks, offering a clear ranking of features. This allows the explainee to understand the factors driving variations in classification.
+
+In the truck example, VGG16 and VGG19 misclassify the image as monitor and sports car respectively. \CTC\/ effectively identifies the vehicle features that could plausibly lead to these errors, such as a monitor-like display or the sleek body shape of a sports car. The relevance scores for these regions are significantly higher than for other parts of the image, demonstrating that the method accurately captures the features driving these misclassifications.
+
+For InceptionV3, the pickup portion of the truck is deemed most relevant, with minimal relevance assigned to the frame. However, for ResNet50 and DenseNet, the frame gains considerable relevance even though the image is classified as a cab. This might be as  the truck is effectively divided into distinct parts during the propagation process. If the entire truck were selected as a cohesive feature, its relevance might have been higher.
+
+Interestingly, although the background achieves the highest relevance in some examples, its contribution is still much lower compared to instances of misclassification, such as VGG16's monitor prediction. In that case, the monitor's relevance score is 18, whereas for the cab classification in ResNet50 and DenseNet, the corresponding relevance scores drop significantly to 3.05 and 5.18, respectively. This underscores how \CTC\/ adapts its explanations based on the classification outcome and feature contributions.
+
+A critical observation is that the explanations provided by other post-hoc interpretability methods show minimal variation across different networks, rendering it challenging to discern the distinct functional characteristics of each classifier. Furthermore, while LRP-$\alpha_1\beta_0$~\cite{bach2015pixel} generally produces similar explanations across different models, it notably struggles with networks like ResNet50. This inconsistency is likely attributable to the network’s unique structural features, such as residual connections, which impact the method's ability to generate clear explanations.
+
+An interesting facet demonstrated is the effect of network size on the explanations generated. There seems a slight negative correlation between the amount of relevance present in other methods' heatmaps and the network size. This is a pressing problem --- network architectures are tending to grow in size in recent years. \CTC\/ demonstrably maintains the amount of information provided to the user.
+
+In contrast to all other methods explanations, the \CTC\/ method's approach to feature ordering provides a more straightforward and insightful analysis. Its ability to distinctly outline and prioritise features makes it easier to identify and understand the differences in the functions learned by various classifiers. This advantage becomes even more pronounced in scenarios depicted in Figure~\ref{Fig:compare_models_same_missclassified_2}, where inputs are not uniformly classified across all networks. In such cases, an interpretability method like \CTC\/ becomes invaluable. It aids in pinpointing differences in the learned functions between correctly and incorrectly classifying networks, offering critical insights into each model's decision-making process.
+
+\section{Quantitative Analysis}
+In this subsection, a quantitative analysis is conducted to assess the input invariance and sensitivity of various attribution methods. The focus is on how these methods respond to alterations in the input data, which are introduced to the input through Gaussian noise, Gaussian blurring, and Uniform noise. This evaluation is crucial in determining the robustness of each method against subtle or impactful changes in the input, thereby providing insight into their reliability and consistency in different scenarios. As in the previous section to allow for independent evaluation and fair comparison to other methods in the literature, the contribution is calculated on the biggest masks as identified by SAM. This is opposed to selecting the masks with the most relevance attributed to them. Given that the change in relevance is what is being measured, the most relevant mask may change, tying the \CTC\/ method results with the relevance method used for mask selection. The goal of this analysis is to identify how faithful the \CTC\/ rules are by introducing noise to the input, and measuring the variance of the output. Therefore, steps were taken to ensure that any variance in the output is as a result of \CTC\/ and the underlying network.
+
+
+Similarly, the quantitative analysis aims to test the fidelity of the importance value assigned to features, not the clustering technique. To evaluate the \CTC\/ value independently of the clustering the biggest masks identified by SAM on the original input are fixed and when evaluated on the noisy inputs. Ultimately, it was decided not to recompute feature-masks as all other methods have a fixed number of input features, they present one value for each pixel, always evaluated on all pixels, in the case of image classification. As such, it stands to reason that the fairest evaluation method would be to measure the difference in explanations over the same input features --- in other words, were new input features to be computed with each injection of noise, it is not trivial to identify which features have mapped to other features from which to compute the distance. Particularly given that \CTC\/ can be employed on top of any existing clustering method, it stands to reasons that fixing masks, and allowing the variance in output to be derived solely from the noise and forward propagation is the most reliable way of assessing the methods robustness and reliability to noise. 
+
+The quantitative analysis tests the input invariance and sensitivity of the explainability method. For a method to be input invariant the change in explanations should be low for changes in the input that are small and do not change the models output. For a method to be sensitive the change in explanations should be high for changes in the input that are big and do change the models classification.
+
+\subsection{Input invariance}
+\label{input_inv}
+Input invariance describes the resilience of an attribution method against certain changes to the input that do not modify the model's output~\cite{YehHSIR19}. Essentially, a robust interpretation method should demonstrate minimal sensitivity to these alterations, meaning it should consistently provide nearly identical explanations even when slight variations are made to the input. To assess the input invariance of the \CTC\/ method and how it compares the input invariance of Input$\times$Gradient~\cite{SimonyanVZ13}, Integrated Gradients~\cite{SundararajanTY17}, DeconvNet~\cite{ZeilerKTF10}, Guided BackProp~\cite{SpringenbergDBR14}, and \LRP\-$\alpha_1\beta_0$~\cite{bach2015pixel}, three types of slight variations of the input are introduced.
+
+
+The first type of input variation is introduced through Gaussian noise using a function that generates noise with a mean of zero and standard deviation of 0.1, which is added to the original image. The second method applies a Gaussian blur, which smooths the image by averaging pixel values in a manner weighted by their proximity to each pixel being processed. The degree of blurring is governed by the size of the Gaussian kernel used in the process, which is $5 \times 5$ in the images generated to test the input invariance of the method. This allows for the blurring to not be too strong. Unlike the Gaussian noise added previously, Gaussian blurring affects the image in a more uniform and systematic way, altering the spatial relationships within the image without introducing extraneous pixel-level variability. The final method introduces Uniform noise. Unlike Gaussian noise, Uniform noise affects all pixels with the same probability and intensity, making it a starkly different test for the attribution method's robustness. The noise is randomly generated within a specified range, which is [-255,255] in the case of images. It is scaled by the intensity parameter, which suits as a noise level. The noise level can hold values between zero and one, where zero means no noise is added to the image and one means that the image is converted only to noise. The noise level parameter was set to 0.02. All resulting noisy images are clipped to ensure all pixel values remain within the [0,255] range, suitable for standard image formats.
+
+\begin{figure}[ht!]
+	\begin{center}
+		\includegraphics[width=0.95\linewidth]{Figures/small_noise.pdf}
+	\end{center}
+	\caption{Examples of images from the ILSVRC 2012 dataset after the introduction of the three types of image alteration --- Gaussian noise addition, Gaussian blurring and Uniform noise.}
+	\label{Fig:noisy_images}
+\end{figure} 
+
+These three methods of image alteration --- Gaussian noise addition, Gaussian blurring and Uniform noise --- provide distinct challenges to the attribution methods being evaluated. The noise images are generated from the ImageNet Large Scale Visual Recognition Challenge 2012 (ILSVRC 2012) data set~\cite{ILSVRC15} and examples of all three types of noisy images can be seen in Figure~\ref{Fig:noisy_images}. As one may observe, the Gaussian noise introduces pixel-level changes, which are too small for the human eye to notice. The Gaussian blurring alters the image's overall texture and detail and smooths the edges of objects present in the image. Finally, the uniform noise affects all pixels with the same probability and intensity, but as the noise level parameter is quite small it can be mostly observed in the lighter part of images. After generating the modified dataset, explanations were created for each input and its variation --- original, Gaussian blurring, Gaussian noise, and Uniform Noise --- using Input$\times$Gradient, Integrated Gradients, DeconvNet, Guided BackProp, \LRP\-$\alpha_1\beta_0$ and the \CTC\/ method. This is followed by a normalisation step before comparing the original and modified inputs, ensuring the sum of explanations equals one. This is especially important for the \CTC\/ method, which tends to assign larger values to regions compared to the individual pixel attributions by other methods. The three types of noise present a comprehensive evaluation of how well the \CTC\/ method, along with others like Input$\times$Gradient, Integrated Gradients, DeconvNet, Guided BackProp, and \LRP\-$\alpha_1\beta_0$, can maintain consistent interpretations in the presence of subtle input variations. Such resilience is key in ensuring reliable and robust model explanations.
+
+
+The comparative results, shown in Figure~\ref{Fig:norm}, Figure~\ref{Fig:blur} and Figure~\ref{Fig:uniform}, are based on 500 distinct original inputs. When measuring the input invariance the results show the difference between original inputs explanation and the noisy input explanation only for the noisy images that do \emph{not} change the classification. As input invariance measures the change in explanations when the input has a small change, here if the noisy image changes the classification the noise added is not considered a small change. The distance between the original input's and the noisy input's explanations is calculated using Euclidean distance. Given two $n$-dimensional vectors \( \vec{v}_1 = (v_{1,1}, v_{1,2}, ..., v_{1,n}) \) and \( \vec{v}_2 = (v_{2,1}, v_{2,2}, ..., v_{2,n}) \), where $\vec{v}_1$ is the original image explanations and $ \vec{v}_2$ is the noisy input explanations, the Euclidean distance \( d \) between them is given by:
+\begin{equation*}
+    d(\vec{v}_1, \vec{v}_2) = \sqrt{\sum_{i=1}^{n} (v_{1,i} - v_{2,i})^2}
+\end{equation*}
+Here, the summation sums up the squares of the differences of the corresponding components of the two vectors, and the square root is taken of the sum. In all figures the top graph presents the variability of all six methods, bellow a description of each distance vector $\vec{d}$ shows the mean, standard deviation, minimum, 25\%, 50\%, 75\% and the maximum value of each distance vector $\vec{d}$. The bottom left graph shows a zoomed version of all six methods, which ignores the outliers in some methods, such as Guided Backpropagation and makes it easier to see the mean and the standard deviation of the majority of distances. The bottom right graph shows the distances between the original explanations and explanation for the noisy image only for \LRP\/ and the \CTC\/ methods. As the distance between the original explanations and explanation for the blurry image for those two methods is very small, it is hard to see their mean and standard deviation. This zoomed graph makes it easier to see this information.  
+
+\subsubsection{Gaussian Noise ($\mu = 0, \sigma = 0.1$)}
+
+The application of Gaussian noise, characterized by a mean ($\mu$) of 0 and a standard deviation ($\sigma$) of 0.1, provides insight into the robustness of attribution methods under moderate noise conditions. As illustrated in Figure~\ref{Fig:norm}, this type of noise has minimal impact on methods like \LRP\-$\alpha_1\beta_0$ and \CTC\/, which continue to produce consistent interpretability. 
+\begin{figure}[ht!]
+	\begin{center}
+		\includegraphics[width=0.92\linewidth]{Figures/minor_noise_normal_stats.pdf}
+	\end{center}
+	\caption{\CTC\/ and \LRP-$\alpha_1\beta_0$ are robust to Gaussian noise, maintaining consistent interpretability with minimal differences in explanations across noisy and original inputs.}
+	\label{Fig:norm}
+\end{figure} 
+
+The results show that out of 500 inputs subjected to Gaussian noise, 477 retained their original classifications, demonstrating the limited effect of this type of noise on classification accuracy. From the perspective of explanation consistency, \CTC\/ exhibits the smallest mean difference between explanations generated from the original and noise-affected inputs. The standard deviation of the differences in \CTC\/ explanations is also low, second only to \LRP\-$\alpha_1\beta_0$. This highlights \CTC\/'s ability to distribute attribution values over broader regions of the input, reducing sensitivity to localized variations introduced by noise. In contrast, pixel-level methods like Input$\times$Gradient and Integrated Gradients show higher sensitivity, as their explanations are directly tied to the intensity of individual pixels. These methods struggle to maintain invariance under noisy conditions, often amplifying discrepancies introduced by the noise.
+
+\subsubsection{Gaussian Blur ($k = (5 \times 5)$)}
+
+The effect of Gaussian blur, with a kernel size of $5 \times 5$, is visualized in Figure~\ref{Fig:blur}. This noise type subtly alters the fine-grained details in the input image by smoothing edges and softening textures. Unlike Gaussian noise, which adds pixel-specific randomness, Gaussian blur systematically reduces high-frequency details, challenging the interpretability of methods that rely heavily on edge information. Out of the 500 inputs tested, 429 retained their original classifications after applying Gaussian blur, showing a slightly greater sensitivity of the network to this noise compared to Gaussian noise.
+
+
+Edge-focused methods like Guided BackProp and \LRP\-$\alpha_1\beta_0$ exhibit greater differences in their explanations between the original and blurred inputs. The lesser edge sharpness due to Gaussian blur disproportionately impacts these methods, leading to almost double the differences compared to Gaussian noise. Other pixel-sensitive methods such as Input$\times$Gradient, Integrated Gradients, and DeconvNet show similar trends, with their attribution values deviating significantly under blurred conditions.
+
+In contrast, \CTC\/ demonstrates remarkable resilience, maintaining consistency in its explanations regardless of the introduction of Gaussian blur. Its standard deviation remains low, on par with Gaussian noise conditions. This robustness can be attributed to \CTC\/'s ability to assign attribution values across broader regions rather than focusing on fine-grained details, making it less susceptible to noise-induced variations. The consistency of \CTC\/ across different types of noise further solidifies its position as a robust interpretability method.
+
+\begin{figure}[ht!]
+	\begin{center}
+		\includegraphics[width=0.92\linewidth]{Figures/minor_blur_stats.pdf}
+	\end{center}
+	\caption{Guided BackProp, \LRP-$\alpha_1\beta_0$ and \CTC\/ are resilient to  Gaussian blur. However Guided BackProp and \LRP-$\alpha_1\beta_0$ are twice more sensitive to it then Gaussian noise, where as \CTC\/ is minimally impacted.}
+	\label{Fig:blur}
+\end{figure} 
+
+\subsubsection{Small Uniform Noise ($l = 0.02$)}
+
+The impact of small uniform noise, applied with a range of $[-0.02, 0.02]$, is presented in Figure~\ref{Fig:uniform}. Unlike Gaussian noise, which varies based on a standard deviation, uniform noise affects all pixels evenly within the specified range, disproportionately impacting lighter regions due to its consistent intensity. This type of noise had the highest impact on classification among the noise types analysed, with 401 of the 500 inputs retaining their original classifications. This indicates a greater sensitivity of the network to uniform noise, even though its intensity is relatively low.
+
+For the 401 inputs with unchanged classifications, the consistency of explanations varied across methods. Input$\times$Gradient, Integrated Gradients, DeconvNet, Guided BackProp, and \LRP\-$\alpha_1\beta_0$ all exhibited significant differences in their explanations compared to Gaussian noise, although these differences were less pronounced than for Gaussian blur. \CTC\/ once again outperformed other methods in terms of robustness, showing minimal changes in its explanations under uniform noise. This suggests that \CTC\/ effectively minimizes the influence of uniform noise by focusing on broader input regions, rather than being overly reliant on pixel-level intensities.
+
+\begin{figure}[ht!]
+	\begin{center}
+		\includegraphics[width=0.93\linewidth]{Figures/minor_noise_uniform_stats.pdf}
+	\end{center}
+	\caption{Guided BackProp, \LRP-$\alpha_1\beta_0$ and \CTC\/ are resilient to Small Uniform Noise. This is the type of noise that has the biggest impact on the network.}
+	\label{Fig:uniform}
+\end{figure} 
+
+\subsubsection{Comparative Analysis of Noise Types}
+
+The results across noise types reveal a consistent pattern in network sensitivity and the robustness of interpretability methods:
+
+\begin{itemize}
+
+    \item \textbf{Highly Sensitive Methods:} \textbf{LRP-$\alpha_1\beta_0$} and the \CTC\/ method consistently demonstrate high sensitivity across all noise types, reliably distinguishing between cases where classification changes occur and where it does not. \textbf{LRP-$\alpha_1\beta_0$} is particularly reactive to Gaussian blur due to its reliance on edge features, while the \CTC\/ method balances global and local feature sensitivity, making it effective against both random noise (Gaussian and Uniform) and structural alterations (blur).
+
+    \item \textbf{Less Sensitive Methods:} \textbf{Guided Backpropagation} and \textbf{DeconvNet} exhibit minimal sensitivity to all noise types, often failing to reflect significant changes in input data. \textbf{Integrated Gradients} and \textbf{Input$\times$Gradient} display moderate sensitivity, particularly excelling with Gaussian blur and Gaussian noise, but are less effective for Uniform noise, indicating limitations in detecting distributed noise variations.
+\end{itemize}
+
+
+Overall, the results reinforce the importance of selecting attribution methods that can preserve interpretability under various noise conditions, with \CTC\/ emerging as the most robust option across all tested scenarios.
+
+\subsection{Sensitivity}
+Sensitivity in interpretability methods refers to how methods react to significant changes in input data. It is crucial that these methods provide distinctly different explanations when the model's classification alters~\cite{NielsenDRRB22}. This section evaluates the sensitivity of the \CTC\/ method by comparing it with several other approaches: Input$\times$Gradient~\cite{SimonyanVZ13}, Integrated Gradients~\cite{SundararajanTY17}, DeconvNet~\cite{ZeilerKTF10}, Guided BackProp~\cite{SpringenbergDBR14}, and LRP-$\alpha_1\beta_0$~\cite{bach2015pixel}. To conduct this comparison, the same three significant types of input variations are introduced, but with much higher levels of noise than the ones when testing input invariance.
+
+The first variation adds Gaussian noise with a much higher standard deviation ($\sigma$) than previously used for assessing input invariance. In this case, the standard deviation $\sigma$ is set at 50, compared to the standard deviation of 0.1 used for input invariance evaluation. The second variation creates a blurred version of the original input. The degree of blurring is governed by the size of the Gaussian kernel used in the process, which is $17 \times 17$ for the sensitivity test, in comparison to the $5 \times 5$ Gaussian kernel used for input invariance. The final variation introduces Uniform noise at a level of 0.3, again substantially higher than the 0.02 level used in the input invariance tests. These increased noise levels are designed to rigorously test the sensitivity of the \CTC\/ method against state-of-the-art methods. The parameters are set arbitrary to lead to a change in the classification, while still preserving part of the original image.
+
+To visually illustrate the impact of these input variations, Figure \ref{Fig:noisy_images_2} presents examples of images from the ILSVRC 2012 dataset after the introduction of the three types of significant image alterations. These images serve as a clear representation of the dramatic changes in input data, providing a concrete basis for assessing the sensitivity and robustness of the \CTC\/ method in comparison to established techniques. The differences observed in these images are crucial for understanding how each method responds to substantial variations in input. As one may observe, the introduction of blur, Gaussian noise, and Uniform noise to the ILSVRC 2012 dataset images results in significant visual alterations, but the inputs are still somewhat recognisable. After generating the modified dataset, explanations were created for each input image variation --- original, Gaussian noise, Gaussian blurring and Uniform Noise --- using Input$\times$Gradient, Integrated Gradients, DeconvNet, Guided BackProp, LRP-$\alpha_1\beta_0$ and the \CTC\/ method.  
+
+\begin{figure}[ht!]
+	\begin{center}
+		\includegraphics[width=0.95\linewidth]{Figures/big_noise.pdf}
+	\end{center}
+	\caption{Examples of images from the ILSVRC 2012 dataset after the introduction of the three types of big image alteration --- Blur ($k = (17 \times 17)$), Gaussian noise addition ($\mu= 0; \sigma=50$) and Uniform noise ($l = 0.3$).}
+	\label{Fig:noisy_images_2}
+\end{figure} 
+
+Similarly to when testing input invariance, the explanations are normalised ensuring the sum of explanations equals one. The three types of noise present a comprehensive evaluation of how well the \CTC\/ method, along with others like Input$\times$Gradient, Integrated Gradients, DeconvNet, Guided BackProp, and \LRP\-$\alpha_1\beta_0$, can reflect big changes in the input. Showing a significantly different explanation when the input has been significantly changed is is key in ensuring reliable model explanations. The comparative results, shown in Figure~\ref{Fig:big_gaus}, Figure~\ref{Fig:big_blur} and Figure~\ref{Fig:big_noise_uniform}, are based on the distance between 500 distinct original inputs and their noisy counterparts. As highlighted in Section~\ref{input_inv} certain methodologies exhibit significant alterations in their explanations even with minimal noise introduction. This section aims to evaluate the relative sensitivity of these methods by examining the variance in explanations between examples where noise did not alter the classification and those where it did. This approach allows for an assessment of explanation changes in relation to a baseline alteration for negligible changes. Each figure presents the variability of all six methods between the inputs that changed the classification and the ones that did not. To validate if the difference is statistically significant, a Welch's t-test was performed~\cite{welch1947generalization}. Welch's t-test, also known as the unequal variances t-test, is a statistical test used to compare the means of two groups to determine if they are significantly different from each other. It is an adaptation of the standard Student's t-test~\cite{student1908probable} and is more reliable in real-world scenarios where the assumption of equal variances between groups is often violated.
+
+
+\subsubsection{Gaussian Noise Addition ($\mu = 0, \sigma = 50$)}
+The distances between the original explanation and the explanation of the input, which has a big amount of Gaussian Noise added is shown in Figure~\ref{Fig:big_gaus}. This blurring alters image details and should result in attribution methods generating explanations different from the original input.
+
+
+The analysis of the impact of Gaussian noise addition ($\mu = 0, \sigma = 50$) reveals significant differences in the sensitivity of various interpretability methods to substantial input alterations. Among the tested approaches, LRP-$\alpha_1\beta_0$ and the \CTC\/ method exhibit the highest sensitivity, with clear and statistically significant distinctions in their explanation distances between cases of "Big change" and "Insignificant change". 
+
+\begin{figure}[ht!]
+	\begin{center}
+		\includegraphics[width=0.92\linewidth]{Figures/big_gaus.pdf}
+	\end{center}
+	\caption{The bigger the change the better the sensitivity to big noise, here the sensitivity of Input$\times$Gradient~\cite{SimonyanVZ13}, Integrated Gradients~\cite{SundararajanTY17}, DeconvNet~\cite{ZeilerKTF10}, Guided BackProp~\cite{SpringenbergDBR14}, and LRP-$\alpha_1\beta_0$~\cite{bach2015pixel} and the \CTC\/ method is illustrated.}
+	\label{Fig:big_gaus}
+\end{figure} 
+
+LRP-$\alpha_1\beta_0$ and the \CTC\/ methods effectively capture the effects of input noise, providing reliable and meaningful explanations when classification changes occur. In contrast, methods such as Guided Backpropagation show minimal sensitivity, with little variation in explanation distances under substantial noise compare to insignificant amount of noise, indicating limited utility for capturing meaningful input changes. Integrated Gradients and Input$\times$Gradient demonstrate moderate-to-high sensitivity, reflecting their robustness in explaining significant alterations. Overall, this evaluation highlights the \CTC\/ method's strong performance in maintaining interpretability and sensitivity under noisy conditions, making it a competitive option compared to state-of-the-art techniques.
+
+
+\subsubsection{Gaussian Blur ($k = (17 \times 17)$)}
+The distances between the original explanation and the explanation of the input, which has a big amount of Gaussian blur is shown in Figure~\ref{Fig:big_blur}. This blurring alters image details and should result in attribution methods generating explanations different from the original input.
+
+
+The analysis of Gaussian blur ($k = 17 \times 17$) reveals significant variations in the sensitivity of interpretability methods to input alterations caused by blurring. Methods such as Integrated Gradients, Input$\times$Gradient, and LRP-$\alpha_1\beta_0$ exhibit strong sensitivity, with clear and statistically significant distinctions in explanation distances when classification changes occur. These methods effectively capture the impact of blurring on input features and model behavior. The \CTC\/ method demonstrates moderate sensitivity, providing reliable explanation differences, although it is slightly less responsive compared to the most sensitive methods. In contrast, Guided Backpropagation and DeconvNet show minimal sensitivity, with negligible changes in explanation distances even for significant classification alterations, suggesting a limited ability to reflect the effects of Gaussian blur. 
+
+The results for the \CTC\/ method are unsurprising, given its lower input invariance to edges, as previously discussed. Unlike methods that heavily rely on early-layer activations, such as LRP-$\alpha_1\beta_0$, \CTC\/ demonstrates a lower sensitivity across the network. LRP and Guided Backpropagation often overemphasize the first convolutional layers, which are highly sensitive to edges and low-level image features. This over-exaggeration makes these methods particularly reactive to Gaussian blur, which primarily alters edge details. Interestingly Guided Backpropagation is not sensitive to the blur in comparison to small blur.
+% shows varying degrees of resilience among the methods, with some, like \CTC, effectively preserving their interpretative accuracy despite the blurring. Note that out of the 500 inputs this change was tested on 429, which did not result in a change in classification. 
+% The top graph 
+\begin{figure}[ht!]
+	\begin{center}
+		\includegraphics[width=0.92\linewidth]{Figures/big_blur.pdf}
+	\end{center}
+	\caption{The bigger the change the better the sensitivity to blurry input. Comparison of method sensitivity to Gaussian blur ($k = 17 \times 17$), highlighting significant variability in explanation distances across interpretability techniques."}
+	\label{Fig:big_blur}
+\end{figure} 
+
+\subsubsection{Uniform Noise Addition ($l = 0.3$)}
+The distances between the original explanation and the explanation of the input, which has a big amount of Uniform Noise added is shown in Figure~\ref{Fig:big_noise_uniform}. 
+
+The analysis of uniform noise addition ($l = 0.3$) highlights significant differences in the sensitivity of interpretability methods to random input alterations. Methods such as \LRP\/, Integrated Gradients and the \CTC\/ demonstrate strong sensitivity, with clear and statistically significant distinctions in explanation distances when classification changes occur. These methods effectively capture the impact of uniform noise on input features, providing reliable and meaningful explanations. Input$\times$Gradient also shows moderate sensitivity, reflecting explanation differences for altered classifications, though less prominently than the top-performing methods. In contrast, Guided Backpropagation and DeconvNet exhibit low sensitivity, with little to no variation in explanation distances between cases of significant and insignificant classification changes. This insensitivity suggests limited reliability for these methods in scenarios involving substantial noise. Overall, the results reaffirm the robustness of methods like \LRP\/, Integrated Gradients and the \CTC\/ method in responding to noisy inputs while underscoring the limitations of less sensitive approaches.
+
+\begin{figure}[ht!]
+	\begin{center}
+		\includegraphics[width=0.95\linewidth]{Figures/big_noise_uniform.pdf}
+	\end{center}
+	\caption{The figure shows the challenge big amount of Uniform noise addition poses to various attribution methods.}
+	\label{Fig:big_noise_uniform}
+\end{figure} 
+
+
+\subsubsection{Comparative Analysis of Noise Types}
+
+The results across noise types reveal a consistent pattern in the sensitivity of interpretability methods and their ability to reflect significant input changes:
+
+\begin{itemize}
+    \item \textbf{Highly Sensitive Methods:} \textbf{LRP-$\alpha_1\beta_0$} and the \CTC\/ method consistently show high sensitivity across all noise types, reliably generating distinct explanations when classification changes occur. While \LRP\/ is particularly reactive to Gaussian blur due to its emphasis on edge features, the \CTC\/ method balances global and local feature attributions, demonstrating strong sensitivity to both random noise (Gaussian and Uniform) and structural noise (blur).
+
+    \item \textbf{Less Sensitive Methods:} \textbf{Guided Backpropagation} and \textbf{DeconvNet} show minimal sensitivity across all noise types, often failing to reflect significant input alterations. Integrated Gradients and Input$\times$Gradient display moderate sensitivity, particularly excelling with Gaussian blur and Gaussian noise, but are less effective for Uniform noise, highlighting limitations in their ability to adapt to distributed noise variations.
+\end{itemize}
+
+
+
+% \subsection{Discussion}
+
+% The key objective of this chapter is to demonstrate that the novel interpretability method, which gives a single value of contribution to the classification (\CTC) to each identified complex input feature, is capable of providing faithful insight into the inner workings of models while delivering these insights in an easily graspable manner. A particular concern is that the simplification of evaluating entire features might negatively harm fidelity. To address this, the chapter looks at fidelity metrics to compare the performance of \CTC\/ against established interpretability techniques. The chapter focuses on two essential attributes: \emph{sensitivity} and \emph{input invariance}. Both of these qualities were assessed by introducing noise to the input and observing the resultant variations in the explanations provided. An ideal interpretability method should exhibit low sensitivity to minor noise perturbations, thereby demonstrating input invariance, particularly under the assumption of a robust network. Conversely, a substantial introduction of noise should lead to a noticeable change in explanation. 
+
+
+
+% The sensitivity of an interpretability method is assessed by measuring how much its explanation fluctuates with the introduction of noise. This chapter aims to provide a nuanced understanding of these fluctuations. The significance of large changes in explanations is assessed by establishing a baseline of minor changes, which serves as a reference point for evaluating the validity of a single explanation. The relevance of a major alteration in the input becomes evident only when contrasted with minor, inconsequential changes. For instance, if an insignificant modification in the input, one that doesn't alter the model's classification, leads to a substantial shift in the explanation, it implies that a major input change would almost certainly result in a significant explanation shift. To contextualise sensitivity, the explanations of inputs with \emph{insignificant} changes is compared--- largest amount of noise that does not affect the classification --- and \emph{significant} changes --- those where the introduced noise does alter the classification, and thus, should also trigger a marked change in the explanation. This approach is part of a broader conversation about the efficacy and intent of these metrics, which is further explored in Chapter~\ref{evl}.
+
+% The results clearly indicate that \CTC\ presents a statistically significant change between the explanations with a significant and insignificant noise for all three types of noise presented. Notably, blurring led to the biggest change in input classification. This is expected as it significantly reduces fine details and alters edge information, which are crucial for the network to make it's predictions. In contrast, Gaussian and Uniform Noise tend to add random pixel-level variations that do not fundamentally alter the underlying structures and edges as drastically as blurring does. In this type of noise the integrated gradients and Input $\times$ Gradient were disproportionately effected compared to distance in explanations using Gaussian Noise and Uniform Noise. Gradient methods are sensitive to spatial information and take the gradient with respect to the input. Blurring disrupts the spatial relationships between pixels by averaging them over a region. This smoothing effect can drastically change their explanations, leading to higher sensitivity. As discussed, to evaluate the \CTC\ value independently of the clustering the biggest masks identified by SAM on the original input are fixed and when evaluated on the noisy inputs used without recomputing. This injects more ordered information, as the mask often are dictated by where there used to be edges in the input. The \CTC\ algorithm is therefore less effected by the smoothing operation than Gaussian Noise and Uniform Noise. That being said, it is still statistically different from the inputs that do not change the classification. Further, the \CTC\ method has the second best sensitivity after \LRP\ on inputs with Gaussian Noise and Uniform Noise. 
+
+
+% In summation, it is evident that a quantitative analysis of empirical results shows that \CTC\ exhibits the qualities of sensitivity and input invarience. Indeed, even despite the considerably simplified input, the method demonstrably maintains fidelity to a degree comparable to other leading methods of interpretability. In light of the goals specified by the thesis (simplifying the explanations to reduce the cognitive load upon the explainee while maintaining fidelity), it is fair to conclude that \CTC\ meets the criteria of preserving faithfulness, despite the clear reduction in explanation dimensionality and granularity. Therefore, under the assumption that reducing the number of input features by clustering/segmenting the input space into relevant features does simplify the explanation, the results provide evidence that the research objectives have been met.  
+
+
 \section{Conclusion}
 
-The method proposed in this chapter assigns a single value of relevance to a complex input feature by propagating its contribution forward. The contribution is calculated by modified versions of the layers of the network. These modified layers allow for the behaviour of inference step of the neural network to be replicated, but with only part of the input present. 
+The method proposed in this chapter assigns a single value of relevance to a complex input feature by propagating its contribution forward. The contribution to the classification (\CTC\/) is calculated by modified versions of the layers of the network. These modified layers allow for the behaviour of inference step of the neural network to be replicated, but with only part of the input present. 
 
-Chapter~\ref{chapter:results} delves into the practical implementation of forward pass retracing, as well as the interpretability and fidelity of the contribution to classification (\CTC\/) values. Through the comprehensive evaluation on various types of neural network architectures and datasets, the next chapter shows the versatility and effectiveness of the \CTC\ method described in this chapter by comparing it to state-of-the-art methods. The chapter further discusses how different architectures and parameter choices affect the contribution values. Through these investigations, the aim is to uncover patterns, correlations, and potential areas for improvement of the \CTC\ method.
+This chapter demonstrates that \CTC\/, is capable of providing deep insights into the inner workings of models while delivering these insights in an easily graspable manner. A particular concern is that the simplification of evaluating entire features might negatively harm fidelity. To address this, the chapter employed fidelity metrics to compare the performance of \CTC\/ against established interpretability techniques. Two essential attributes were examined: \emph{sensitivity} and \emph{input invariance}. Both of these qualities were assessed by introducing noise to the input and observing the resultant variations in the explanations provided. An ideal interpretability method should exhibit low sensitivity to minor noise perturbations, thereby demonstrating input invariance, particularly under the assumption of a robust network. Conversely, a substantial introduction of big amount of noise should lead to a noticeable change in explanation. 
+
+The empirical results demonstrates that \CTC\/ exhibits the qualities of sensitivity and input invariance. Indeed, even despite the considerably simplified input, the method demonstrably maintains fidelity to a degree comparable to other leading methods of interpretability and in some cases better. In light of the goals specified by the thesis (simplifying the explanations to reduce the cognitive load upon the explainee while maintaining fidelity), it is fair to conclude that \CTC\/ meets the criteria of preserving faithfulness, despite the clear reduction in explanation dimensionality and granularity. 
+
+
+ 
+
+% Chapter~\ref{chapter:results} delves into the practical implementation of forward pass retracing, as well as the interpretability and fidelity of the contribution to classification (\CTC\/) values. Through the comprehensive evaluation on various types of neural network architectures and datasets, the next chapter shows the versatility and effectiveness of the \CTC\ method described in this chapter by comparing it to state-of-the-art methods. The chapter further discusses how different architectures and parameter choices affect the contribution values. Through these investigations, the aim is to uncover patterns, correlations, and potential areas for improvement of the \CTC\ method.

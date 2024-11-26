@@ -1,24 +1,67 @@
-\chapter{Relevance distribution tracing}
+\chapter{Relevance Distribution Tracing}
 \label{chapter:revLRP}
 \section{Introduction}
 
-The process of attributing importance to a complex input features in deep neural networks is a critical step in understanding how these models make decisions. This chapter introduces a concrete approach to this task, expanding on the second part of our framework for faithful and interpretable explanations in deep neural networks (see Chapter~\ref{chap:framework}). There are two primary methods to address the challenge of assigning a single value of relevance to complex input features: forward pass retracing, which inspects the contribution of complex input feature to the output with respect to the inference step (see Chapter~\ref{chapter:REVEAL}), and reverse relevance distribution tracing, which inspects part of the input with respect to the distribution of relevance attributed to it by an explainability method, which we explore in depth in this chapter.
+This chapter focuses on creating faithful post-hoc local explanations. It takes a set of complex input features as defined in the previous Chapter~\ref{chap:clustering} and assigns a single value of relevance to each complex input feature.
+
+The chapter starts by exploring the limitation of using a naive approach of aggregating the relevance of a complex input feature. To address these challenges, this chapter further proposes \emph{Reverse Relevance Distribution Tracing} as a method that evaluates the actual influence of complex input features during the forward pass of the network, rather than depending on aggregation techniques. By tracing the distribution of relevance from specific input features through the network layers, it becomes possible to assign a single relevance value to each complex feature that more accurately reflects its contribution to the final output.
+
+The contributions of this chapter are as follows: 
+\begin{enumerate} 
+\item Proposal of a novel method called \emph{Reverse Relevance Distribution Tracing}, which reverses Layer-wise Relevance Propagation (\LRP) to assign a single relevance value to a cluster of features. This method preserves the original faithfulness of \LRP\ while enhancing interpretability. 
+\item Introduction of vector-based definitions for \LRP\ rules, transitioning from previous neuron-level descriptions using set theory to a more generalized and accessible framework. 
+\item Development of a set of rules for reversing the relevance propagated by basic \LRP\ rules, enabling the backward tracing of relevance distribution through the network. 
+\item Extension of the proposed method to the Alpha Beta rule, allowing for a more nuanced distribution of relevance scores and adaptability to different types of neural network layers and architectures. 
+
+\end{enumerate}
+
+\section{Challenges with Aggregation of Relevance Scores}
+
+The naive way to assign a single value is by aggregating the relevance scores provided by an interpretability method to the individual features within the cluster, thereby offering a summarized measure of the cluster's significance. Various aggregation methods, such as mean, median, or weighted sum, could be considered based on the application.
+
+Aggregating relevance scores into a single value effectively compresses the diversity and granularity of the information contained within the cluster. This can be problematic when features have vastly different relevances that become obscured through aggregation. Not only can it lead to a loss of information, but it can also introduce biases or distortions. For example, taking a simple mean might be sensitive to outliers, while a median might not capture the influence of exceptionally important features well. The single value of relevance should be equally representative of all input features in the cluster, which could be problematic if the cluster contains a diverse range of features with different relevance scores, as no aggregation metric can capture this diversity with a single value.
+
+In Figure~\ref{Fig:aggregating}, the aggregated scores of various clusters are presented. The method used to aggregate the scores involves both the median and the mean. 
+% No notable difference between median and mean can be seen; however, size and composition have a tremendous effect on the values assigned.
+
+\begin{figure}[ht!]
+	\centering
+	\includegraphics[width=\linewidth]{Figures/Mean_median.pdf}
+	\caption{This figure is divided into two sections: ``Mean of Relevances'' (top) and ``Median of Relevances'' (bottom). It consists of three columns, with the left being the baseline image, the center showing a heatmap of regional relevance using Layer-wise Relevance Propagation (LRP), and the right displaying a color-coded relevance representation, where the image is overlaid with a gradient representing regions of interest, accompanied by a color scale legend for quantitative interpretation.}
+	\label{Fig:aggregating}
+\end{figure} 
+
+For instance, smaller clusters, exemplified by those representing the fruit that the insect is on top of, showcase both a high mean and a high median. This suggests that the majority of input features within these clusters have high relevance, leading to their high scores.
+
+Conversely, the larger cluster representing the body of the insect exhibits a different trend. The insect's cluster consists of areas with significant variations in relevance—some areas possess exceptionally high relevance while others do not. 
+
+% This heterogeneity within the cluster results in both a mean and median that are relatively low. This is particularly interesting as the mean and median values for the violin's cluster might not give a comprehensive view or representation of all the input features that constitute it. It underscores the importance of understanding the individual contributions within a cluster rather than just relying on aggregated metrics, as they might mask the nuances and variations present within larger, more diverse clusters.
+
+\section{Interdependence of Features in Neural Networks}
+
+Each feature in the input feature map undergoes various transformations as it passes through the layers of a network. These transformations are influenced by the surrounding features, affecting the ultimate relevance that a feature has. For example, pooling layers aggregate information from kernels of features, inherently making the output a function of multiple input features (see Section~\ref{section:avglayer}). Methods like batch normalization standardize features based on the distribution formed by all features, further intertwining their relevances (see Section~\ref{section:bn}). Current explainability methods that focus on properties such as fidelity, input invariance, handling saturation, and sensitivity assign the value of relevance of each feature in the input space given the output and its connection to other input features~\cite{SimonyanVZ13, SpringenbergDBR14, bach2015pixel, SelvarajuCDVPB20, ChattopadhyaySH18, abs-1908-01224, SmilkovTKVW17}. Therefore, each feature's assigned value is relative to every other feature in the input feature map. When aggregating the relevance from the same cluster, the relationship between the complex input feature relevance and other complex input feature relevances will not be the same as the relationships between the features that comprise it. A further problem with aggregation methods is that the relevance of distinct features in the input space can come from the \emph{same} more complex feature detected in the deeper layers of the network. Hence, in situations where a cluster contains highly correlated features, the aggregation might amplify this correlation, leading to overemphasis or underrepresentation of certain aspects in the data. Conversely, in cases where clusters contain uncorrelated or weakly related features, the aggregated score might dilute the individual feature's significance.
+
+The inherent interdependence between features makes the process of untangling individual contributions challenging. For instance, when a convolutional layer identifies a specific pattern in an image, it doesn't just recognize a single pixel but rather a combination of neighboring pixels forming a pattern. So, if one were to assign importance to a single pixel in this scenario, it would not accurately reflect the true importance. Instead, the combined pattern of several pixels holds the true importance. When features are aggregated into clusters, this interdependency causes the problems described so far. This is particularly problematic in cases where the network has many layers and complex interactions between features, as some features may seem relevant but might not have a direct or substantial importance to the final output.
 
 
-The method chosen for reversal in this context is Layer-wise Relevance Propagation (\LRP\/)~\cite{bach2015pixel}. This decision is largely influenced by the faithfulness provided by the approach. The method is input invariant and it considers the contribution of each neuron relative to others, which helps in understanding the impact of saturated features, while also producing different results when drastic changes occur in the input and output. By tracing the relevance of a part of the input and assigning a single value of relevance to the entire region, this method preserves the original faithfulness, while improving interpretability of the explanation. The reverse relevance distribution tracing approach utilising \LRP\/ involves retracing the relevance that has been assigned to each layer from the specific input features back. By applying the reverse rules of \LRP\/ (see Section~\ref{rev_LRP}), insight is gained not only into the feature relevance to the the final output but also the relevance that was due to that feature in the middle layers. \LRP, unlike other propagation techniques which can be sensitive to the model's non-linearities and high-dimensional interactions, is designed to conserve the relevance signal across layers. This conservation principle ensures that the relevance attributed to the output is precisely apportioned back through each layer, ultimately distributing it over the input features in a manner that reflects their contribution to the final decision. Therefore, the choice to reverse \LRP\/ rules allows for each complex input feature to have a single value of relevance that adhers to the input feature's influence on the network's decision-making process. 
+\section{Relevance Distribution Tracing}
 
+To solve this, this chapter proposes a set of rules for \emph{Reverse Relevance Distribution Tracing}, which inspects parts of the input with respect to the distribution of relevance attributed to them by backward propagation explainability methods.
 
-In Figure~\ref{Fig:thee_stage} one can observe a comprehensive illustration that encapsulates the process of inference, followed by relevance assignment and then forward distribution of relevance in a neural network. The leftmost portion of the figure displays a neural network during the forward inference step, where the input data is processed through successive layers to yield an output. Highlighted paths indicate the flow of data, which is visualised in yellow. At the centre figure the backward pass phase is illustrated, where relevance from the output is traced back through the network to the input features, employing \LRP\/. This process is visualised by red moving from the output neuron back through the hidden layers, eventually reaching the input layer. Each backward step represents the application of \LRP\/ rules to redistribute relevance to preceding neurons, demonstrating how contributions to the final decision are mapped back to individual input features. The rightmost panel of the figure depicts the novel forward distribution of relevance from selected features and highlights the process of reversing the \LRP\/ rules.
-A subset of input features is shown as the starting point for this stage and the proportion of the relevance that corresponds to this subset is distributed passing through the relevant pathways in the network once more. The redistribution is shown in green and the flow of information is from the input layer to the output. 
+In this context, Layer-wise Relevance Propagation (\LRP)~\cite{bach2015pixel} is selected as the method for reversal, primarily because of its faithful representation of relevance distribution. \LRP is input-invariant and accounts for each neuron's contribution relative to others, which aids in understanding the impact of saturated features. Additionally, it produces different results when drastic changes occur in the input and output, enhancing its sensitivity to significant variations. By tracing the relevance of a part of the input and assigning a single relevance value to the entire region, \LRP preserves the method's original faithfulness while improving the interpretability of the explanation.
+
+The reverse relevance distribution tracing approach utilizing \LRP\/ involves retracing the relevance assigned to each layer back from specific input features. By applying the reverse rules of \LRP\/ (see Section~\ref{rev_LRP}), one can gain insight not only into the feature's relevance to the final output but also the relevance attributed to that feature in the intermediate layers. Unlike other propagation techniques, which can be sensitive to the model's non-linearities and high-dimensional interactions, \LRP\/ is designed to conserve the relevance signal across layers. This conservation ensures that the relevance attributed to the output is precisely apportioned back through each layer, ultimately distributing it over the input features in a manner that reflects their contribution to the final decision. Therefore, by reversing the \LRP\/ rules, each complex input feature is assigned a single relevance value that reflects its influence on the network's decision-making process.
+
+Figure~\ref{Fig:thee_stage} provides a comprehensive illustration of the neural network processes of inference, relevance assignment, and relevance distribution
+tracing. The leftmost panel depicts the inference step, where input data is processed through successive layers to produce an output, with activation flow highlighted in yellow, where the brighter the colour the higher the activation. The center panel illustrates the backward pass, where relevance from the output is traced back to the input features using \LRP\/, visualized with red arrows moving from the output neuron back to the input layer. This step shows how contributions to the final decision are mapped back to individual input features through the application of \LRP\/ rules at each layer. The rightmost panel shows the novel relevance distribution tracing from selected input features, highlighting the process of reversing the \LRP\/ rules. Here, a subset of input features serves as the starting point, and the relevance corresponding to this subset is redistributed forward through the network, indicated by green arrows, from the input layer to the output until the contribution to the classification (\CTC\/) value is found.
 
 \begin{figure}[ht!]
 \begin{center}
-\includegraphics[width=\linewidth]{Figures/thee_stage.pdf}
-\caption{A three-phase neural network process is depicted, showcasing initial inference, Layer-wise Relevance Propagation (LRP), and subsequent relevance redistribution of a complex input feature. Starting with data propagation through a network (left), where key contributing pathways are emphasised, the figure progresses to illustrate the tracing of output relevance back to inputs via LRP, and culminates with the forward redistribution of relevance based on selected features ( marked in green), effectively mapping decision contributions within the network.}
+\includegraphics[width=0.95\linewidth]{Figures/thee_stage.pdf}
+\caption{Illustration of the three-phase neural network process, showcasing initial inference (left), Layer-wise Relevance Propagation (LRP) for relevance assignment (center), and the forward redistribution of relevance based on selected input features (right). Data propagation during inference is highlighted in yellow, the backward tracing of relevance via LRP is shown in red, and the forward redistribution of relevance from selected features is indicated in green, effectively mapping the contributions of input features to the network's decision-making process.}
 \label{Fig:thee_stage}
 \end{center}
 \end{figure}
-
 
 \section{Basic Rule}
 
@@ -71,7 +114,6 @@ R_{j}= \vec{a}_{j} \odot \nabla\left [\vec{t_{k}}(\boldsymbol{x}) \cdot \frac{\v
 which encapsulates the propagation of relevance from layer $\Lambda_k$ to $\Lambda_j$. However, understanding each step in detail as described in this subsection is critical for appreciating the intricacies of \LRP\ and building on top of it. 
 
 
-A detailed breakdown of the \LRP\ process, from the initial transformation of the activation vector to the final distribution of relevance to a preceding layer, is visualised in the accompanying Figure~\ref{Fig:LRP_breakdown}, which illustrates the application of \LRP\ between two layers, $\Lambda_j$ and $\Lambda_k$. 
 \begin{figure}[ht!]
 \begin{center}
 \includegraphics[width=\textwidth]{Figures/LRP_illustration.pdf}
@@ -81,7 +123,12 @@ A detailed breakdown of the \LRP\ process, from the initial transformation of th
 \end{figure} 
 
 
-\subsection{Inverse Basic LRP Rule for propagating a Complex Input Feature}
+A detailed breakdown of the \LRP\ process, from the initial transformation of the activation vector to the final distribution of relevance to a preceding layer, is visualised in the accompanying Figure~\ref{Fig:LRP_breakdown}, which illustrates the application of \LRP\ between two layers, $\Lambda_j$ and $\Lambda_k$. In the example presented in Figure~\ref{Fig:LRP_breakdown}, the relevance matrix at layer \(\Lambda_k\), denoted as \(\vec{R}_k\), is initialized with values \([0.6, 0.2]\). The propagation begins by computing the transformation matrix \(\vec{t}_k(\vec{x})\) for the activations from the previous layer \(\Lambda_j\) using the equation \(\vec{t}_k(\vec{x}) = W_j^\intercal \vec{x} + \vec{\epsilon}\). Here, \(\vec{t}_k(\vec{x})\) results in \([0.2, 0.73]\). The relevance scores are then distributed using element-wise division of \(\vec{R}_k\) by \(\vec{t}_k(\vec{x})\), yielding the scaled relevance vector \(\vec{s}_k = [3, 0.146]\). This vector captures the proportion of relevance attributed to each activation unit. 
+
+Next, the vector \(\vec{s}_k\) is multiplied by the weight matrix \(W_j\) to compute the intermediate gradient vector \(\vec{c}_j = W_j \vec{s}_k = [0.098, 1.026, 1.500, 0.014]\), which represents the relevance contributions distributed across the units in layer \(\Lambda_j\). Finally, element-wise multiplication with the activation vector \(\vec{a}_j = [0.3, 0.5, 0.1, 0.7]\) scales the gradient values, resulting in the relevance vector for layer \(\Lambda_j\), \(\vec{R}_j = [0.029, 0.513, 0.150, 0.009]\). This example illustrates how \LRP\ systematically redistributes relevance from deeper layers to preceding layers, aligning with the contributions of individual units to the overall decision. 
+
+\subsection{Relevance Distribution
+Tracing by Reversing Basic LRP Rules}
 \label{rev_LRP}
 The novel method proposed in this section reverses the propagated relevance of each complex input feature layer by layer starting from the input until the classification is reached. The final value that reaches the classification is the relevance value assigned to the complex input feature. This relevance distribution tracing is performed for all complex input features identified from the clustering algorithm described in Chapter~\ref{chap:clustering}. 
 
@@ -176,15 +223,22 @@ The vector \( \vec{R}_k^\prime \) represents the final redistributed relevance f
 
 \begin{figure}[ht!]
 \begin{center}
-\includegraphics[width=0.75\textwidth]{Figures/reverse_v2.pdf}
+\includegraphics[width=0.80\textwidth]{Figures/reverse_v2.pdf}
 \end{center}
-\caption{Concrete Example of the Inverse Layer-wise Relevance Propagation Process. This figure visually represents the step-by-step methodology of the inverse LRP as applied within a neural network. Each step of the process is depicted with corresponding mathematical representations and visual aids to enhance comprehension.}
-
-\label{Fig:reverse_LRP_breakdown}
+\caption{Concrete Example of the Inverse Layer-wise Relevance Propagation Process. This figure visually represents the step-by-step methodology of the inverse LRP as applied within a neural network.}
+\label{Fig:Reverse_LRP_2}
 \end{figure} 
 
-This detailed breakdown of the inverse of LRP process, is further elucidated through a concrete example depicted in the Figure~\ref{Fig:reverse_LRP_breakdown}. This figure illustrates the practical application of the steps outlined in the reverse LRP method, showcasing how the redistribution of relevance is calculated and visualised in a neural network.
-\newpage
+In the example depicted in Figure~\ref{Fig:Reverse_LRP_2}, the process of redistributing relevance using inverse layer-wise relevance propagation begins with the relevance distribution matrix \(R_{jk}\), where values represent the relevance contributions from neurons in layer \(\Lambda_k\) to layer \(\Lambda_j\). 
+
+For instance, the relevance matrix \(R_{jk}\) for this layer interaction includes values such as \([0.0, 0.029]\), \([0.45, 0.06]\), \([0.15, 0.0]\), and \([0.0, 0.009]\). These values are element-wise normalized against the total relevance of \(\Lambda_j\), resulting in the proportional relevance matrix \(P_{jk}\) with entries like \([0.0, 1.0]\), \([0.88, 0.12]\), \([1.0, 0.0]\), and \([0.0, 1.0]\). 
+
+The relevance redistribution for a new input feature is then calculated using the proportional relevance \(P_{jk}\), scaled by the new relevance values at \(\Lambda_j\), denoted as \(\vec{R}_j'\). For this example, the new relevance matrix \(R_{jk}'\) becomes \([0.0, 0.0]\), \([0.563, 0.076]\), \([0.0, 0.0]\), and \([0.0, 0.07]\), illustrating the redistributed values back to layer \(\Lambda_k\). 
+
+The final step scales the original relevance of layer \(\Lambda_k\), represented as \(\vec{R}_k = [0.6, 0.2]\), by the proportional aggregate relevance ratio \(Q_k = [0.93, 1.489]\). This results in the updated relevance vector \(\vec{R}_k' = [0.558, 0.297]\), signifying the final redistributed relevance for layer \(\Lambda_k\) aligned with the relevance of the input feature. This systematic process ensures the preservation of relevance while accurately redistributing it in reverse through the network layers. 
+
+% This detailed breakdown of the inverse of LRP process, is further elucidated through a concrete example depicted in the Figure~\ref{Fig:reverse_LRP_breakdown}. This figure illustrates the practical application of the steps outlined in the reverse LRP method, showcasing how the redistribution of relevance is calculated and visualised in a neural network.
+% \newpage
 \section{The Alpha Beta Rule}
 \label{section:more}
 

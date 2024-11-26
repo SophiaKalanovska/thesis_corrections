@@ -1,27 +1,27 @@
-\chapter{Artificial Neural Networks Background}
+\chapter{Background}
 \label{chap:background}
 \section{Introduction}
 
 Neural networks have emerged from a combination of mathematical concepts, applied statistics and computational structures~\cite{du2013neural}. This chapter delves into the essential foundations of neural networks, shedding light on the motivation for their use, notation, basic principles, and architectural elements that underpin their functioning.
 
-Neural networks, inspired by the human brain~\cite{arbib2003handbook, abraham2005artificial}, are computational models designed to \textit{extract information} from data, \textit{recognise useful patterns} in data or \textit{make decisions} based on data~\cite{basu2010use, perlovsky2001neural}. In this chapter the notational conventions commonly used to describe neural networks are defined. Subsequently, the fundamental building block of neural networks is explored: the neuron. The methods by which artificial neurons process information through weighted connections and activation functions is described.
+Neural networks, are computational models designed to \textit{extract information} from data, \textit{recognise useful patterns} in data or \textit{make decisions} based on data~\cite{basu2010use, perlovsky2001neural}. In this chapter the rotational conventions commonly used to describe neural networks are defined. Subsequently, the fundamental building block of neural networks is explored: the neuron. The methods by which artificial neurons process information through weighted connections and activation functions is described. This is followed by a discussion on layers, which are formed by interconnected neurons. The mathematical operations within each layer are shown.
 
-This is followed by a discussion on layers, which are formed by interconnected neurons. The mathematical operations within each layer are shown and then the underlying principles of neural network training that lead to the network's ability to generalise from training data to unseen instances are presented. The role of loss functions as guides for optimisation is presented, and backpropagation --- the technique that computes gradient information to update the weights of the neurons connections --- is explained.
-
-This chapter lays the foundation for the forthcoming discussions on explainability methods for neural networks in Chapter~\ref{chap:lit}.
+This chapter lays the foundation for the forthcoming discussions on explainability methods for neural networks in Chapter~\ref{chap:lit}. How neurons process input and the different function associated with different layers and the notation introduced are necessary for the contribution chapters of this thesis, where rules are defined as to how contribution and relevance can be propagated forward (see Chapter~\ref{chapter:REVEAL} \& Chapter~\ref{chapter:revLRP})
 
 \section{Neural Network Motivation and General Structure}
 
-Artificial neural networks represent a simplified view of the brain. They consist of \textit{processing units}, called neurons, which communicate though \textit{weighted connections} (expressed as directed edges) (see Figure~\ref{fig:neural}). A neural network can have million or even billion of neurons, each one performing a simple computation (see Section~\ref{Sec:process}). A neuron's output of a computation is fed though the weighted connections into the subsequent connected neurons. These neurons in turn use that output as their input for the simple computation they perform. This operation, performed by all neurons jointly, implements a non-linear mapping from the input to the output and allows neural networks to perform complex tasks. 
+Artificial neural networks consist of \textit{processing units}, called neurons, which communicate though \textit{weighted connections} (expressed as directed edges) (see Figure~\ref{fig:neural}). A neural network can have million or even billion of neurons, each one performing a simple computation (see Section~\ref{Sec:process}). A neuron's output of a computation is fed though the weighted connections into the subsequent connected neurons. These neurons in turn use that output as their input for the simple computation they perform. This operation, performed by all neurons jointly, typically implements a non-linear mapping from the input to the output and allows neural networks to perform complex tasks~\footnote{The mapping could be linear in certain cases, such as in the case of a single layer perceptron or a neural network where all layers are linear}. 
 
-Neurons are organised into sequential layers, forming the architecture of a neural network. Each layer is a function that receives input from the previous layer and produces output that serves as input for the subsequent layer. The layer's function is implemented by all neurons that form it. Figure~\ref{fig:neural} shows four functions connected in a chain $f_{0}$, $f_{1}$, $f_{2}$ and $f_{3}$, which form the overall neural network function $f(x) = f_{3}(f_{2}(f_{1}(f_{0}(x))))$, where $f_{0}$ is the input layer and $f_{3}$ is the final output layer. The length of the chain determines the depth of the model. 
+Neurons are typically organised into sequential layers, forming the architecture of a neural network. Each layer is a function that receives input from the previous layer and produces output that serves as input for the subsequent layer. The layer's function is implemented by all neurons that form it. Figure~\ref{fig:neural} shows four functions connected in a chain $f_{0}$, $f_{1}$, $f_{2}$ and $f_{3}$, which form the overall neural network function $f(x) = f_{3}(f_{2}(f_{1}(f_{0}(x))))$, where $f_{0}$ is the input layer and $f_{3}$ is the final output layer. The length of the chain determines the depth of the model. 
 
-\begin{Definition}{Neural Network}{}
+\begin{Definition}{Neural Network}{nn}
+
 A \emph{(trained) neural network} is a tuple $\NN=\big(\Lambda,\passto,(f_k)_{k\in \Lambda}\big)$ where $(\Lambda,\passto)$ is a directed graph over a set of \emph{layers} $\Lambda=\{0,\dots, N\}$, with a single source $0\in \Lambda$, referred to as the \emph{input layer} and single sink $N\in \Lambda$, referred to as the \emph{output layer}. Each $f_k:\bbR^{n_j}\to \bbR^{m_k}$ describes a vector transformation associated with each layer, with the dimensionality conditions that $m_k=\sum_{j\passto k} n_j$, for all $k=1,\dots N$.
 %
-We say that layer $j$ \emph{precedes} layer $k$ if $j\passto k$, and that layers $j$ and $k$ are \emph{consecutive}.
+We say that layer $j$ \emph{precedes} layer $k$ if $j\passto k$, and that layers $j$ and $k$ are \emph{consecutive}. In recurrent neural networks $j = k$ in some consecutive layers. 
 \end{Definition}
-The network $\NN$ computes a function $f_{\NN}:\bbR^{d}\to \bbR^{d'}$ on inputs of dimension $d=n_0$ to output of dimension $d'=m_N$, by successively computing the output of each layer, starting from the input layer. 
+
+The network $\NN$ computes a function $f_{\NN}:\bbR^{d}\to \bbR^{d'}$ on inputs of dimension $d=n_0$ to output of dimension $d'=m_N$, by successively computing the output of each layer, starting from the input layer. The~\Cref{def:nn} is later used in Chapter~\ref{chapter:REVEAL} and Chapter~\ref{chapter:revLRP} when showing the rules that allow for the propagation of relevance and the identification of single value of relevance for features.
 
 The arrangement and function of layers and the number of neurons within each layer determine the network's capacity to learn and generalise from data. Layers in neural networks can be divided into two groups, \textit{visible layers} and \textit{hidden layer(s)}. Visible layers, namely the \textit{input layer}, which receives inputs from the environment (\textit{e.g.\ }an image of a cat to be classified) and the \textit{output layer}, which sends outputs to the environment (\textit{e.g.\ }the label ``bengal cat'' --- the classification of the input). The hidden layers are the layers between the input and the output and they can be any natural number $n \in \mathbb{N}$ (see Figure~\ref{fig:wide} B). 
 
@@ -57,7 +57,7 @@ Figure~\ref{Fig:decision} (b) shows a neural network with a single non-linear hi
 \subsection{Feature Representation}
 Machine learning systems require an extensive volume of data to acquire the expertise needed for specific tasks. The performance of all machine learning algorithms is heavily contingent on the manner in which data is represented and structured. Finding the optimal set of features that enables the algorithm to grasp a task proficiently is challenging and stands as the main motivation for neural networks, which not only acquire a mapping from input to output, but also the pertinent features from the input.
 
-Whenever the number of hidden layers of the network is small and the hidden layers have many neurons, then the neural network often memorises the training data rather than learns features from the input~\cite{PoggioMRML17}. The architecture of such neural network is referred to as wide (see Figure~\ref{fig:wide}~A). The limited amount of layers in such architectures prevents the network from learning concepts and patterns from the data and leads to a failure of the network to perform well (\textit{generalise}) to unseen samples. This problem is referred to as \textit{memorisation of the training data} or (\textit{overfitting}). To deal with overfitting the vast majority of neural networks used and designed are deep neural networks (DNNs) with a number of hidden layers (see Figure~\ref{fig:wide}~B). Neural networks that are created with more that one hidden layer, have the capability of learning their own complex features, capturing the natural hierarchy that many machine learning tasks have. They can learn complicated concepts by building them out of simpler ones, which allows for complex mappings to be learned without memorisation of the training data. An example of this hierarchy of abstractions can be seen in the process of arriving at a class label for an image recognition task. The input layer recognises pixels, the hidden layers following the input layer can learn to recognise edges in the image and deeper into the network the algorithm may detect more complex things such as object and textures, until it finally arrives at a label that describes the object identified. 
+Whenever the number of hidden layers of the network is small and the hidden layers have many neurons, then the neural network often memorises the training data rather than learning features from the input~\cite{PoggioMRML17}. The architecture of such neural network is referred to as wide (see Figure~\ref{fig:wide}~A). The limited amount of layers in such architectures prevents the network from learning concepts and patterns from the data and leads to a failure of the network to perform well (\textit{generalise}) to unseen samples. This problem is referred to as \textit{memorisation of the  training data}. To allow for hierarchical representations to be learned majority of neural networks used and designed are deep neural networks (DNNs) with a number of hidden layers (see Figure~\ref{fig:wide}~B). Neural networks that are created with more that one hidden layer, have the capability of learning their own complex features, capturing the natural hierarchy that many machine learning tasks have. They can learn complicated concepts by building them out of simpler ones, which allows for complex mappings to be learned without memorisation of the training data. An example of this hierarchy of abstractions can be seen in the process of arriving at a class label for an image recognition task. The input layer recognises pixels, the hidden layers following the input layer can learn to recognise edges in the image and deeper into the network the algorithm may detect more complex things such as object and textures, until it finally arrives at a label that describes the object identified. 
 
 
 \begin{figure}[ht!]
@@ -71,11 +71,11 @@ Whenever the number of hidden layers of the network is small and the hidden laye
 
 Many machine learning algorithm need to have their features selected (a process commonly referred to as feature engineering) to make their task easier to learn. However, as briefly discussed (see Section~\ref{featureeng}) this can be a challenging endeavour and the ability of deep neural networks to learn their own feature representations is one of the main reasons behind their popularity. The inputs to a neural network is referred to as a an \textit{input feature map} $F$ and is a $n$-dimensional array that can take any form. 
 
-\begin{Definition}{Input Feature Map}{}
+\begin{Definition}{Input Feature Map}{inputfeature}
 Input feature map $F \in \mathbb{R}^{d_1 \times d_2 \times \ldots \times d_n}$, where $d_1, d_2, \ldots, d_n$ are the dimensions along each axis of the tensor and the number of dimensions $n$ could vary based on the type of data.
 \end{Definition}
 
-In image data $F \in \mathbb{R}^{H \times W \times D}$, where $H$ is the height of the feature map, $W$ is the width and $D$ is the depth, usually corresponding to the number of colour channels (\eg three for an RGB image) and a single value in the feature map is $F_{i, j, k}$, where $i$ is the row index ($1 \leq i \leq H$), $j$ is the column index ($1 \leq j \leq W$), an $k$ is the depth index ($1 \leq k \leq D$). When learning from text data each word or token could be represented as a vector in a high-dimensional space, often called an embedding. A sequence of words can then be viewed as $F \in \mathbb{R}^{N \times D}$, where $N$ is the number of tokens in the sequence and $D$ is the dimensionality of the embeddings. For time-series data (\eg stock prices, weather data, etc.), the feature map might be a two-dimensional array $F \in \mathbb{R}^{ T \times F}$, where $T$ is the number of time steps and $F$ is the number of features at each time step (\eg opening price, closing price, volume for stock data).
+In image data $F \in \mathbb{R}^{H \times W \times D}$, where $H$ is the height of the feature map, $W$ is the width and $D$ is the depth, usually corresponding to the number of colour channels (\eg three for an RGB image) and a single value in the feature map is $F_{i, j, k}$, where $i$ is the row index ($1 \leq i \leq H$), $j$ is the column index ($1 \leq j \leq W$), an $k$ is the depth index ($1 \leq k \leq D$). When learning from text data each word or token could be represented as a vector in a high-dimensional space, often called an embedding. A sequence of words can then be viewed as $F \in \mathbb{R}^{N \times D}$, where $N$ is the number of tokens in the sequence and $D$ is the dimensionality of the embeddings.
 
 
 Deep neural networks transform and extract information from the input feature map $F$ through their layers. This higher-level, abstract representations of input data is referred to as a \textit{learned feature}~\cite{hinton2006reducing}. Depending on the task the learned features can be discrete (\eg labels such as ``ears”, ``mouth”, etc.) or continuous (\eg numeric values representing height, pixel values, etc.). As data passes through layers of the neural network, it undergoes a series of transformations (discussed further in Section~\ref{Sec:process}). These operations create new feature maps at each layer, which capture increasingly complex and abstract characteristics of the original input. The learned feature vector after each layer is denoted as $F_i$ that is a result of the transformation of the layer $\lambda_i$, represented as:
@@ -84,29 +84,45 @@ Deep neural networks transform and extract information from the input feature ma
     F_i = \lambda_i(F_{i-1})
 \end{eqnarray}
 
+
 \begin{Definition}{Feature Vector}{}
-Each layer $\lambda_i$ has a feature vector $F_i \in \mathbb{R}^{d_1 \times d_2 \times \ldots \times d_n}$, which is a result of the transformation of the previous layer's output feature map. The input feature vector is a special type of a feature vector $F_0$ that doesn't result from a transformation, but is given to the network as input.
+Each layer \(\Lambda_i\) in a neural network, as defined in~\Cref{def:nn}, has a feature vector \(F_i \in \mathbb{R}^{d_1 \times d_2 \times \ldots \times d_n}\). This feature vector \(F_i\) is the result of the transformation applied by the function \(f_i\) at layer \(\Lambda_i\), acting on the output feature maps of all preceding layers \(\Lambda_j\) where \(j \passto i\). 
 \end{Definition}
 
-All the possible values of the feature vector forms a $d$-dimensional space called the \textit{feature space} (Figure~\ref{fig:space} A). Each \textit{sample} $X$, also called a data point or exemplar consist of a set of features from the feature space. All data points that are created through any combination of the $d$ features can be represented as points in the feature space (Figure~\ref{fig:space} B). The way the samples are distributed across the space dictates how easy it is for a function to be learned that performs the task well. For example, in a classification task, choosing features that allow exemplars from the same class to be close together and exemplars from different classes to be far apart will allow the classifier to discriminate between the classes more easily. Figure~\ref{fig:space}~C shows a hypothetical feature space of a feature vector deeper in the network, which have transformed the original features vector $F_0$ and its space that can be seen in Figure~\ref{fig:space}~B to one where a decision function can easily separate the two classes. 
+Feature vectors are learned by the neural network and as such there is no transparency on what the features look like or how important they are to the networks output. An explanation for the decision of a neural network can therefore be defined as:
 
-% \begin{Definition}{Learned Features}{}
-% Given an input $I\in\bbR^d$, we define a \emph{complex feature} of $I$ to be ...
-% % a subset $F\subseteq \bbR^2$.
-% \end{Definition}
-
-
-\begin{figure}[ht!]
-	\begin{center}
-		\includegraphics[width=\linewidth]{Figures/feature_space.pdf}
-	\end{center}
-	\caption{Illustration of a feature space and datapoints in feature space. In practice neural networks have a feature space dimentionality far greater than the one illustrated.}
-	\label{fig:space}
-\end{figure} 
+\begin{Definition}{Explanation}{}
+An explanation for the decision of a neural network is a mapping \( E: F_i \rightarrow I_i \), where \( F_i, I_i \in \mathbb{R}^{d_1 \times d_2 \times \ldots \times d_n} \). The importance vector \( I_i = E(F_i) \) assigns to each feature in \( F_i \) a numerical importance score \( (I_i)_{k_1, k_2, \ldots, k_n} \), representing the importance of \( (F_i)_{k_1, k_2, \ldots, k_n} \) to the neural network's output. This mapping provides a faithful representation of how each feature influences the network's decision.
+\end{Definition}
 
 \subsection{Specialised Neural Network Architectures}
-Neural networks are versatile and can learn from data that is obtained from the physical world (\textit{e.g.\ }camera) or comes from online sources (\eg databases, surveys). Input data can be in a number of forms (\textit{e.g.\ }video, sound, images, EEG recordings, salary etc.) depending on the task. The foundational architecture that can be trained on various inputs is the multi-layer perceptron (MLPs). Characterised by their feed forward structure and multiple layers, MLPs can capture complex relationships in data and have been used for variety of tasks. They have since been subsumed by more specialised architectures aimed at specific tasks. Specific neural network architectures are better equipped and applied to a subset of problems. For instance, when processing image data, a \textit{convolutional neural network} (CNN) is often the architecture of choice~\cite{egmont2002image}. CNNs contain layers, such as convolutional layers and pooling layers (see Section~\ref{sec:conv} \& Section~\ref{section:max}), that can detect and learn hierarchical patterns in images. On the other hand, for sequential data like time series or natural language, \textit{recurrent neural networks} (RNNs), Long Short-Term Memory (LSTM) networks, and increasingly in recent years, transformer networks are often chosen~\cite{husken2003recurrent, langkvist2014review, zhou2021informer}. These architectures have the capability to process sequential inputs allowing them to establish connections between past and present data points. Networks like \textit{autoencoders} are specialised in data compression and noise reduction. The autoencoder architecture starts wide with layers containing many neurons followed by middle layers with fewer neurons and ending with wide layers again. This forces the network to compress the input into a compact representation and then reconstructing it. Neural networks are also deployed in situations where an agent learns to perform actions in an environment to achieve certain objectives (\ie reinforcement learning tasks), in such cases Deep Q-Networks (DQNs) or Actor-Critic networks are often employed. It is important to note, that here are listed only the most popular architectures and that there are many more neural network architectures available and a wide range of values that the parameters in these networks can have.
+Neural networks are versatile and can learn from input data in a number of forms (\textit{e.g.\ }video, sound, images, EEG recordings, salary etc.) depending on the task. The foundational architecture that can be trained on various inputs is the multi-layer perceptron (MLPs). Characterised by their feed forward structure and multiple layers, MLPs can capture complex relationships in data and have been used for variety of tasks. They have since been subsumed by more specialised architectures aimed at specific tasks. Specific neural network architectures are better equipped and applied to a subset of problems. For instance, when processing image data, a \textit{convolutional neural network} (CNN) is often the architecture of choice~\cite{egmont2002image}. CNNs contain layers, such as convolutional layers and pooling layers (see Section~\ref{sec:conv} \& Section~\ref{section:max}), that can detect and learn hierarchical patterns in images. On the other hand, for sequential data like time series or natural language, \textit{recurrent neural networks} (RNNs), Long Short-Term Memory (LSTM) networks, and increasingly in recent years, transformer networks are often chosen~\cite{husken2003recurrent, langkvist2014review, zhou2021informer}. These architectures have the capability to process sequential inputs allowing them to establish connections between past and present data points. Networks like \textit{autoencoders} are specialised in data compression and noise reduction. The autoencoder architecture starts wide with layers containing many neurons followed by middle layers with fewer neurons and ending with wide layers again. This forces the network to compress the input into a compact representation and then reconstructing it. Neural networks are also deployed in situations where an agent learns to perform actions in an environment to achieve certain objectives (\ie reinforcement learning tasks), in such cases Deep Q-Networks (DQNs) networks  are often employed. It is important to note, that here are listed only the most popular architectures and that there are many more neural network architectures available and a wide range of values that the parameters in these networks can have.
 
+
+\subsection{Convolutional Neural Networks (CNNs)}
+
+
+The increased interpretability and faithfulness of the techniques in this thesis are examined on image data. This section covers some of the more popular neural networks for processing images.
+
+Convolutional Neural Networks (CNNs) are specialized deep learning architectures designed to process data with a grid-like topology, such as images~\cite{726791}. They leverage spatial hierarchies by applying convolutional filters (see Section~\ref{sec:conv}) to local regions of the input, enabling the network to learn local patterns and assemble them into complex features through successive layers. CNNs are the main architecture used for image recognition tasks due to their ability to capture spatial and temporal dependencies in data efficiently.
+
+Several CNN architectures have been developed to enhance performance on image classification and recognition tasks. This section discusses some of the most influential architectures: VGG16~\cite{SimonyanZ14a}, VGG19~\cite{SimonyanZ14a}, ResNet50~\cite{he2015deep}, InceptionV3~\cite{szegedy2015rethinking}. 
+
+\subsubsection{VGG16 and VGG19}
+
+VGG16 and VGG19 are deep convolutional networks introduced by Simonyan and Zisserman~\cite{SimonyanZ14a}. These architectures are known for their simplicity and depth, utilizing small $3 \times 3$ convolutional filters throughout the entire network. VGG16 consists of 16 weight layers, while VGG19 extends this to 19 weight layers. Both networks follow a straightforward design pattern: stacking multiple convolutional layers, each followed by a rectified linear unit (ReLU) activation, and periodically applying max-pooling layers for spatial downsampling.
+
+The uniform use of $3 \times 3$ filters allows the network to capture intricate features while keeping the receptive field manageable. However, the increased depth leads to a significant number of parameters—approximately 138 million for VGG16—which demands substantial computational resources and increases the risk of overfitting. Despite these challenges, VGG networks have demonstrated excellent performance on image classification benchmarks, serving as a baseline for many subsequent architectures.
+
+\subsubsection{ResNet50}
+
+ResNet50 is a 50-layer deep convolutional network introduced by He et al.~\cite{he2015deep}. It addresses the degradation problem observed in very deep networks, where adding more layers leads to higher training errors. ResNet50 employs a novel architecture called \textit{residual learning}, which uses shortcut connections (also known as skip connections) to create identity mappings that bypass one or more layers.
+
+These shortcut connections enable the network to learn residual functions with reference to the layer inputs, effectively allowing the layers to fit a residual mapping rather than the entire transformation. This approach mitigates the vanishing gradient problem, facilitating the training of much deeper networks without performance degradation. ResNet50 has approximately 25.6 million parameters, significantly fewer than VGG networks, and has achieved state-of-the-art results in image recognition tasks.
+
+\subsubsection{InceptionV3}
+
+InceptionV3 is an advanced version of the Inception architecture developed by Szegedy et al.~\cite{szegedy2015rethinking}. The Inception modules within this architecture are designed to capture multi-scale spatial information by performing parallel convolutions (see Equation~\ref{eq:conv_layer}) with different filter sizes ($1 \times 1$, $3 \times 3$, and $5 \times 5$) within the same layer. InceptionV3 achieves a balance between computational efficiency and model complexity, making it suitable for deployment in environments with limited resources. With approximately 23.8 million parameters, it offers competitive performance on large-scale image recognition datasets.
 
 \section{Neurons Transforming Data from Layer to Layer}
 \label{Sec:process}
@@ -133,7 +149,7 @@ The transfer function integrates all inputs and weights (if there are weights as
 % \chrislong{The notation allows you to be more precise here: for example ``If $w_{ji}>0$ then neuron $i$ has a positive (excitatory) influence on neuron $j$, while if $w_{ji}<0$ then $i$ has a negative (inhibitory) influence on $j$''}
 \begin{figure}[ht!]
 	\begin{center}
-		\includegraphics[width=\linewidth]{Figures/neuron.pdf}
+		\includegraphics[width=0.9\linewidth]{Figures/neuron.pdf}
 	\end{center}
 	\caption{Illustration of a neuron $j$}
 	\label{fig:neuron}
@@ -154,7 +170,7 @@ The response function that neurons in a layer utilise is not just a mathematical
 
 \subsection{Response function}
 
-The choice of a response function can shape the tasks a layer is most adept at handling. For instance, a layer which has an activation function that squashes the input into a range can be ideal for outputting probabilities. On the other hand, a non-linear activation function can capture complex patterns in data, allowing the network to model non-linear relationships. Without non-linear activation functions the neural network layers would just be a composition of linear transformations which would itself be a linear transformation, so complex relationships would not be learned. 
+The choice of a response function can shape the tasks a layer is most adept at handling. For instance, a layer which has an activation function that squashes the input into a range can be ideal for outputting probabilities. A non-linear activation function can capture complex patterns in data, allowing the network to model non-linear relationships. Without non-linear activation functions the neural network layers would just be a composition of linear transformations which would itself be a linear transformation, so complex relationships would not be learned. 
 
 The response function can prioritise kinds of patterns during training (\eg edge detection), it can make the network more robust to different input ranges (\eg by normalising the input) and it is crucial for the successful training (\ie convergence) of deep neural networks. Given the variety and use of both transfer and activation functions, they can be combined in countless ways to yield desired behaviours in neural networks. In this section, we will first explain some of the most prominent transfer and activation functions. Subsequently we explore prevalent combinations employed in widely recognised types of layers, with a particular focus on computer vision and CNNs.
 
@@ -229,10 +245,10 @@ where $\vec{x}$ is the input vector (or the region that is fed tot h neuron) and
 
 \textbf{Convolutional Transformation}
 \label{section:conv}
-The convolutional transformation operates on small regions (sub-matrices) of the input feature map and calculates the dot product between the input and a learned filter associated with this transfer function, often referred to as a kernel. Each neuron from the layer has an associated region slice of the input feature map $X$ of dimensions $h \times w$ that the filter $W$ of dimensions \( f_h \times f_w \) is covering. For simplicity, let's assume that both the input feature map and filter have only one channel. The neuron computes the following weighted sum of its inputs (which is the convolution operation):
+The convolutional transformation operates on small regions (sub-matrices) of the input feature map and calculates the dot product between the input and a learned filter associated with this transfer function, often referred to as a kernel. Each neuron from the layer has an associated region slice of the input feature map $X$ of dimensions $h \times w$ that the filter $W$ of dimensions \( f_h \times f_w \) is covering. For simplicity, assume that both the input feature map and filter have only one channel. The neuron computes the following weighted sum of its inputs (which is the convolution operation):
 
 \begin{equation}
-t_{conv}(X) = \sum_{i=0}^{f_h - 1} \sum_{j=0}^{f_w - 1} X(i, j) \cdot W(i, j) + b
+t_{conv}(X) = \sum_{i=0}^{f_h - 1} \sum_{j=0}^{f_w - 1} X(i, j) \cdot W(i, j) + b.
 \label{eq:conv}
 \end{equation}
 
@@ -324,24 +340,24 @@ In dense layers, often referred to as fully connected layers, each neuron is con
 Each neuron in a dense layer performs a weighted sum of its inputs (see Section~\ref{eq:weightredsum}) as a transformation function, where the weights associated with each input determine the strength of the connection between neurons. After the linear transformation (dot product of inputs with weights and addition of bias), the result is typically passed through a non-linear activation function, commonly ReLU (Rectified Linear Unit) (see equation~\eqref{eq:relu}), in some cases the activation function is just bypassed through an identity function $f(x) = x$.
 
 \begin{Definition}{Dense Layer}{}
-The \emph{dense layer function} $f_k:\bbR^{n_j}\to \bbR^{m_k}$, which describes the vector transformation associated with the layer $\lambda_k$. The transfer function of dense layer neurons is a weighted sum transformation defined in equation~\eqref{eq:weightredsum}. The activation function part of dense layers may be any function of the ones defined in Section~\ref{section:act}
+The \emph{dense layer function} $f_k:\bbR^{n_j}\to \bbR^{m_k}$, which describes the vector transformation associated with the layer $\lambda_k$. The transfer function of dense layer neurons is a weighted sum transformation defined in Equation~\eqref{eq:weightredsum}. The activation function part of dense layers may be any function of the ones defined in Section~\ref{section:act}
 \end{Definition}
 
 \subsubsection{Max Pooling Layer}
 \label{section:max}
 
-Max pooling layers play a pivotal role in extracting essential features from input data, especially in convolutional neural networks. They divide the input of the layer into non-overlapping regions and select the maximum value within each region. The size of the pooling operation or filter is smaller than the size of the feature map. Commonly, the filter is $2\times 2$ pixels applied with a stride of 2 pixels. Stride denotes by how many pixels apart are all filters. As max pooling doesn't have overlapping regions, the stride and the filter dimension are the same. In the case where we have a filter of $2\times 2$, the resulting layer will have each dimension halved, reducing the number of pixels or values in each feature map to one quarter the size. 
+Max pooling layers play a pivotal role in extracting essential features from input data, especially in convolutional neural networks. They divide the input of the layer into non-overlapping regions and select the maximum value within each region. The size of the pooling operation or filter is smaller than the size of the feature map. Commonly, the filter is $2\times 2$ pixels applied with a stride of 2 pixels. Stride denotes by how many pixels apart are all filters. As max pooling does not have overlapping regions, the stride and the filter dimension are the same. In the case where we have a filter of $2\times 2$, the resulting layer will have each dimension halved, reducing the number of pixels or values in each feature map to one quarter the size. 
 
 More concisely max pooling layer divides the input $X$ in to into groups of $k$ values. Each group is fed as input to a neuron $j_i$ from the max pooling layer, which performs a max pooling transformation $t_{max}$ (see Section~\ref{section:maxout}) and outputs the maximum element from the group. The overall function the layer performs can be summarised by 
 
 \begin{equation}
-\operatorname{MaxPooling}(X)= [t_{max}(X[i \cdot s_x, j \cdot s_y, c])]_{i,j,c}
-\label{eq:maxlayer}
+\operatorname{MaxPooling}(X)= [t_{max}(X[i \cdot s_x, j \cdot s_y, c])]_{i,j,c},
+% \label{eq:maxpooling}
 \end{equation}
 
 where is the input, $(i,j)$ are the indices of the output, $c$ is the channel index, $s_x$ and $s_y$ are the stride values in the horizontal and vertical directions, respectively. Figure~\ref{Fig:maxpooling} shows an example of the output of a max pooling layer.
 
-The max-pooling process has many advantages. Notably, taking the maximum value across every group of $k$ features, reduces the parameters that the subsequent layer operates with by a factor of $k$. This allows the layer to capture the most salient features present in the input while discarding less significant information. Max pooling is also known for removing invariances, meaning the network can still recognise features regardless of their position, rotation and scale. As a result the max pooling operation enhances the network's ability to generalise and makes it more robust to noise. Max pooling layers don't have learnable parameters.
+The max-pooling process has many advantages. Notably, taking the maximum value across every group of $k$ features, reduces the parameters that the subsequent layer operates with by a factor of $k$. This allows the layer to capture the most salient features present in the input while discarding less significant information. Max pooling is also known for removing invariances, meaning the network can still recognise features regardless of their position, rotation and scale. As a result the max pooling operation enhances the network's ability to generalise and makes it more robust to noise. Max pooling layers do not have learnable parameters.
 
 \begin{figure}[ht!]
 	\begin{center}
@@ -364,10 +380,10 @@ More concisely average pooling layer divides the input $X$ in to into groups of 
 
 \begin{equation}
 \operatorname{AvgPooling}(X)= [t_{avg}(X[i \cdot s_x, j \cdot s_y, c])]_{i,j,c}
-\label{eq:maxlayer}
+\label{eq:averagepooling}
 \end{equation}
 
-where is the input, $(i,j)$ are the indices of the output, $c$ is the channel index, $s_x$ and $s_y$ are the stride values in the horizontal and vertical directions, respectively. Figure~\ref{Fig:avg} shows an example of the output of a average pooling layer. Average pooling layers also don't have learnable parameters.
+where is the input, $(i,j)$ are the indices of the output, $c$ is the channel index, $s_x$ and $s_y$ are the stride values in the horizontal and vertical directions, respectively. Figure~\ref{Fig:avg} shows an example of the output of a average pooling layer. Average pooling layers also do not have learnable parameters.
 
 
 \begin{figure}[ht!]
@@ -401,7 +417,7 @@ More concisely convolutional layer divide the input $X$ in to into groups of $k$
 \begin{equation}
 \operatorname{Conv}(X)= [t_{conv}(X[i \cdot s_x, j \cdot s_y, c])]_{i,j,c}
 % \underset{m, n}{t_{conv}}(X_{i \cdot s_x+m, j \cdot s_y+n, k}, h)
-\label{eq:maxlayer}
+\label{eq:conv_layer}
 \end{equation}
 
 where $X$ is the input, $(i,j)$ are the indices of the output, $c$ is the channel index, $s_x$ and $s_y$ are the stride values in the horizontal and vertical directions, respectively. Figure~\ref{Fig:conv} shows an example of the output of a convolutional layer.
@@ -437,256 +453,10 @@ The batch normalisation layer $k\in \Lambda$ during the forward pass can be expr
 \end{equation}
 where $\frac{(\vec{x}-\mu)}{\sqrt{\sigma^2 +\epsilon}}$ normalises the input, the multiplication with $\gamma$ scales the values within the distribution, while the addition of $\beta$ shifts them. The normalisation component of the layer has an $\epsilon$ value which is a small constant to avoid division by zero and maintain numerical stability, $\mu$ is the learned mean and $\sigma$ is the learned standard deviation from all the examples seen during training.
 
-% \subsubsection{Concatenation Layer}
-
-% \begin{Definition}{Concatenation Layer}{}
-
-% \end{Definition}
-
-\section{Training}
-\label{sec:training}
-As discussed, the non-linear mapping between the input and the output in a neural network is enabled through the combination of all hidden neurons’ decision boundaries. The position of neuron $j$'s decision boundary is defined through the parameters associated with the layer neuron $j$ belongs to. Hence, to create a network that performs a specific task one needs to find a combination of weights and biases for all neurons, kernels, layer' means and variances or any other learnable parameter a layer may have that enable the network to perform the task in question. The process of finding the appropriate values is called \emph{training} and is the main focus of this section. 
-
-Hypothetically, if the task is very simple an exhaustive search of the weights and biases could be possible, but this way of `learning' quickly becomes impractical~\cite{BianchiniS14}. 
-In general, an $n$-layer neural network, where all neurons are connected to the next layer (\ie it is fully connected) with $l_1,l_2,\dots l_n$ be the number of neurons in each of the $n$ layers and $l_{bi}$ is the number of biases for layer $i$, the overall number of parameters is given by:
-
-\begin{equation}
-\text{Total Parameters} = \sum_{i=1}^{N} \left( (l_{i-1} \times l_{i}) + l_{bi} \right)
-\end{equation}
-
-
-The term $l_{i-1} \times l_{i}$ accounts for the weights between each neuron from $l_{i-1}$ and each neuron in $l_{i}$. For convolutional neural networks, recurrent neural networks, or any specialised architectures, the calculation would be more complex and would depend on additional factors like filter sizes, strides, padding, etc., for convolutional layers, or the type of recurrent unit (LSTM, Gated Recurrent Unit (GRU), etc.) for recurrent layers.
-
-
-\begin{Example}{ANN number of parameters}{}
-For instance, a fully connected neural network trained to recognise digits from the MNIST dataset that has 784 neurons as input (the images are 28 $\times$ 28 pixels), two hidden layers each with 32 neurons (this is arbitrary) and an output layer of size 10 (encoding the digits in the range 0--9). The number of parameters in this minimal classifier is $784 \times 32$ ($\ie$ the weights connecting the input and the hidden layer ($n \times l$)) + $32 \times 32$ ($\ie$ the weights connecting the hidden layers $(l \times l)^{m-1}$) + $32 \times 10$ ($\ie$ the weights connecting the hidden layer and the output layer ($l \times k$)) + $32 \times 2$ ($\ie$ the biases of all neurons in the hidden layers ($l \times m$)) + 10 ($\ie$ the  biases in the final layer ($k$)) = 26 506 overall parameters. Even in such a small network the number of parameters is too big for an exhaustive search of the weights and biases to be feasible, much less in the current state-of-the-art neural networks for image classifications, where the neural network can have as many as 480 million parameters~\footnote{The number of parameters on the FixEfficientNet neural network trained for the ImageNet Large Scale Visual Recognition Challenge (ILSVRC)~\cite{FixEff}.}
-or language generation models, where the parameters can be as 220 billion parameters~\footnote{The number of parameters on the ChatGPT 4 model, which is said to have  as many as eight models with 220 billion parameters each for a total of about 1.76 trillion parameters.}
-\end{Example}
-
-For more complex tasks, neural networks tune their parameters by using a training data to improve their performance. This is called \textit{training} (also referred as \textit{learning} and \textit{parameter tuning}) and is analogous to learning in animals, which have central nervous system and learn to improve their performance through experience. Before training can commerce one must choose the neural networks size, the number of hidden layer and the type of activation functions the neurons perform. The weights and biases or any other learnable paramethers in the network must also be initialised with pseudo-random values. The values of the weights and biases can then be iteratively updated until the non-linear mapping between the input and the output in a neural network performs as expected on the pattern recognition task in question. 
-
-
-% \subsection{Supervised learning}
-
-
-
-\subsection{Backpropagation}
-\label{sec:backprop}
-During this type of training each input vector $\vec{x}$ has the associated approximated or ground truth output. This output can be a class label in a classification task, the desired number in a regression task or a reward in reinforcement learning. During this type of training, the network is fed an input vector $\vec{x}$ without the given output. The network then tries to perform the task in training to produce an output $\vec{z}$, which is then compared to the input's target output $\vec{t}$. If the target output is different from $\vec{z}$, the algorithm adjusts the learnable parameters so that the network gives the correct output in the future. 
-
-The most general way of adjusting the learnable parameters is by \textit{backpropagation}. Each iteration during training consists of two modes. In the first mode (the feed-forward mode), the input vector is fed through the network, where neurons at each layer perform their response function and pass the output to the subsequent connected neurons until the last layer of the network is reached (explained in Section~\ref{Sec:process}). In the second mode (the learning mode), the algorithm computes the difference between the computed output $\vec{z}$ and the target output $\vec{t}$ of the network and then minimises this difference (the error). 
-
-\subsection{Training Error}
-\begin{Definition}{Training error}{}
-The \emph{training error} is computed using a cost function $cost: \mathbb{R}^d \times \mathbb{R}^d \to \mathbb{R}$, which takes as input the constant target output vector $\vec{t} \in \mathbb{R}^d$ and the computed output vector $\vec{z}\in \mathbb{R}^d$ and calculates the single real valued training error $cost(\vec{t},\vec{z})= C \in \mathbb{R}$
-\end{Definition}
-
-The training error, or cost $C$ is computed at each iteration by taking the distance between the target output vector $\vec{t}$ of the neural network and the computed output vector $\vec{z}$ of the neural network. The distance is calculated using a cost function $cost(\vec{t}, \vec{z})$ (is also referred to as a \textit{objective function} or a \textit{loss function}). The error is dependant on the value of the computed vector $\vec{z}$, as the target output vector $\vec{t}$ is static for each instance. The computed vector $\vec{z}$ is a result of where the input sits with respect to the current neural network's decision boundary and the position of the decision boundary is set by the learnable parameters vector $\vec{w}$. Therefore, the objective function $cost(\vec{t}, \vec{z})$ calculates the error not only of the computed vector $\vec{z}$, but also the overall error of all weights, biases, kernels, layer’ means and variances or any other learnable parameters. For that reason the cost function is sometimes expressed as $cost(\vec{w})$.
-
-\subsubsection{Loss Functions}
-The cost $C$ can be computed using any distance function. The most widely used one is the \textbf{Mean Squared Error} $\mathrm{MSE_n}: \mathbb{R}^n \times \mathbb{R}^n \to \mathbb{R}$, given by: 
-
-\begin{equation*}
-\mathrm{MSE_n}(\vec{x}, \vec{y})= \frac{1}{n} \sum_{k=1}^{n}\left(x_k-y_k\right)^{2} 
-\end{equation*}
-
-
-where $n$ is the number of data points, the subscript $k$ denotes the index of the element in the vector of observed values $\vec{x}$ and the vector of predicted values $\vec{y}$ . 
-
-When computing the training error of the neural network, the vector of observed values $\vec{x}$ is equal to the computed output vector of the neural network $\vec{z}$, the vector of predicted values $\vec{y}$ is equal to the target output vector $\vec{t}$. Therefore the training error of the neural network, when using mean squared error is given by:
-
-
-% where $n$ is the number of data points, the subscript $k$ denotes the index of the element in the vector of computed values $\vec{z}$ and the vector of target values $\vec{t}$. When the mean squared error is applied to the neural network the 
-
-
-\begin{eqnarray*}
-    cost(\vec{t}, \vec{z}) & = & \frac{1}{2} \sum_{k=1}^{n}\left(z_{k} - t_k\right)^{2} \\
-    & = & \frac{1}{2}\norm{\vec{t}-\vec{z}}^{2} 
-\end{eqnarray*}
-% \chrislong{
-% Check this matches which your previous definition? This seems to suggest that you are only working with 2-dimensional vectors $\vec{t},\vec{z}\in \bbR^2$?
-% }
-
-where the subscript $k$ denotes the index of the output in the target output vector $\vec{t}$ and the computed output vector $\vec{z}$, $n$ refers to the size of the $\vec{t}$ and $\vec{z}$ vectors and the $\norm{\vec{t}-\vec{z}}$ denotes the \textit{L2-norm operator}, which is the square root of the sum of the squares of $\vec{t}$ and $\vec{z}$.
-
-\textbf{Mean Absolute Error} $\mathrm{MAE_n}: \mathbb{R}^n \times \mathbb{R}^n \to \mathbb{R}$ is another often used loss function. It calculates the average of the absolute differences between the predicted and actual values. It is less sensitive to outliers compared to $\mathrm{MSE_n}$ and is given by:
-
-\begin{eqnarray*}
-\mathrm{MAE_n}(\vec{x}, \vec{y})= \frac{1}{n} \sum_{k=1}^{n} |x_k - y_k|
-\end{eqnarray*}
-
-\textbf{Root Mean Squared Error} $\mathrm{RMSE_n}: \mathbb{R}^n \times \mathbb{R}^n \to \mathbb{R}$ is the square root of $\mathrm{MSE_n}$ and provides an error metric in the original units of the output variable. Because it squares the errors before averaging, $\mathrm{RMSE_n}$ gives a relatively high weight to large errors. This is useful when large errors are particularly undesirable. $\mathrm{RMSE_n}$ is just the square root of $\mathrm{MSE_n}$, so it retains many of the beneficial properties of $\mathrm{MSE_n}$ while being in the same units as the original data, making interpretation easier.
-
-\begin{eqnarray*}
-\mathrm{RMSE_n}(\vec{x}, \vec{y})=\sqrt{\frac{1}{n} \sum_{k=1}^{n} (x_k - y_k)^2}
-\end{eqnarray*}
-
-\textbf{Cross-Entropy Loss} $\mathrm{CrossEntropy}: \mathbb{R}^n \times \mathbb{R}^n \to \mathbb{R}$ also known as log loss~\cite{shannon1948mathematical}, is the most common loss function for classification problems. It measures the performance of a classification model whose output is a probability value between 0 and 1.
-
-\begin{eqnarray*}
-\mathrm{CrossEntropy}(\vec{x}, \vec{y})= -\sum_{k=1}^{n} [x_i \log(y_k) + (1-x_k) \log(1-y_k)]
-\end{eqnarray*}
-
-\subsection{Learnable parameter updating}
-
-A trained neural network should perform the tasks in question with a low error and high accuracy (see Section~\ref{sec:eval}). During training the objective is to minimise the training error $C$ computed in the previous step. The value $C$ is minimised by changing the computed vector $\vec{z}$ to be similar to the target vector $\vec{t}$. The values in the computed vector $\vec{z}$ are determined by the values of the learnable parameter vector $\vec{w}$. Hence, the training error $C$ is reduced by updating the learnable parameters in a way that minimises the difference between the computed vector $\vec{z}$ and the target vector~$\vec{t}$. The learnable parameter updates are done iteratively in small steps (called a \textit{learning rate} $\eta$) until either:
-
-\begin{enumerate}
-    \item The lowest value of the objective function $cost(\vec{w})$ is found in the neighbourhood of the initial value. This is referred to as a \emph{local minima} and the value found may not be the optimum value. This is the case for non-convex functions ($\ie$ functions where not all local minimas are global minima ($\ie$ the optimum value)) (see Figure~\ref{Fig:local_global}~A).
-    \item The lowest value of the objective function $cost(\vec{w})$ is found that is also the optimum value of $cost(\vec{w})$. This is referred to as a \emph{global minima} and can be guaranteed only if the objective function $cost(\vec{w})$ is a convex function ($\ie$~any local minima is a global minima)(see Figure~\ref{Fig:local_global}~B). 
-\end{enumerate}
-
-
-\begin{figure}[ht!]
-	\begin{center}
-		\includegraphics[width=\linewidth]{Figures/graphs_local_global.pdf}
-	\end{center}
-	\caption{Illustration of a non-convex and convex function}
-	\label{Fig:local_global}
-\end{figure} 
-
-At time step $m$, the vector containing the learnable parameter in the network $\vec{w}_m$ is changed in a direction that reduces the value of the overall training error $cost(\vec{w}_m)$. The new value of the learnable parameter vector $\vec{w}_{m+1}$ is calculated by taking the learnable parameters in the network $\vec{w}_m$ and adding a change $\Delta\vec{w}_m$ that reduces the error $C(\vec{w}_m)$. Hence, the weights and biases update is given by:
-
-\begin{equation*}
-\vec{w}_{m+1}=\vec{w}_{m}+\Delta \vec{w}_{m}
-\end{equation*}
-
-where $\Delta \vec{w_m}$ is a vector and each element in the vector is a number that corresponds to the change of the learnable parameters in the vector $\vec{w}_m$. Using this rule for updating the learnable parameter vector, one can calculate at time step $m+1$ the training error $C$ and then repeat the update until the $\vec{w}$ stops changing. Figure~\ref{Fig:finding_minima} illustrates four iterations of backpropagation algorithm, where the blue circle is the current position and each arrow show the step taken in the direction that reduces the training error $C$  until a local minima is reached. 
-
-\begin{figure}[ht!]
-	\begin{center}
-		\includegraphics[width=0.85\linewidth]{Figures/finding_minima.pdf}
-	\end{center}
-	\caption{Illustration of four iterations of backpropagation algorithm, where the learnable parameter vector $\vec{w}$ is updated at each time step to reduce the training error $cost(\vec{w})$ }
-	\label{Fig:finding_minima}
-\end{figure} 
-
-An alternative way of thinking about minimising the training error $C$ is to think of it as moving the current position of the error in the direction of the slope of $cost(\vec{w})$ (as illustrated in Figure~\ref{Fig:finding_minima}). The direction of the slope is computed using \textit{gradients} --- a vector that points in the direction of greatest increase of a function. As the objective is to minimise the cost function $cost(\vec{w})$, one can take the negative gradient and then move iteratively in the direction of greatest decrease of the function. 
-
-The gradient is calculated by taking the partial derivatives of all variables in the function. The variables in the case of the objective function $cost(\vec{w})$ are all learnable parameter $\vec{w}$. The derivatives of the objective function $cost(\vec{w})$ measure the sensitivity to change of the $cost(\vec{w})$ function's output $\vec{z}$ with respect to the change in the variables $\vec{w}$. Calculating the partial derivatives computes how much each \textit{single} parameter $w_i$ from the vector $\vec{w}$ contributes to the overall error. The change in the objective function $cost(\vec{w})$ with respect to the change of $w_i$ is given by:
-
-
-\begin{equation*}
-\Delta w_i = -\eta \frac{\partial cost(\vec{w})}{\partial w_{i}}
-\end{equation*}
-
-where $\eta$ is a learning rate, most commonly in the range $\eta \in [0,1]$, which determines the size of the steps taken in the direction of the greatest decrease of the function. When the element $w_i$ is updated using the equation described above ${w_i(m+1)=w_i(m)+\Delta w_i(m)}$, the error of that learnable parameter is decreased leading to an overall decrease in the training error $cost(\vec{w})$ .
-
-The partial derivatives are calculated using the \textit{chain rule}. The chain rule looks at the dependencies that the learnable parameter $w_i$ has and expands the partial derivatives equation to include those dependencies. Therefor the partial derivative of $w_i$ can be expanded to:
-
-\begin{equation*}
-\frac{\partial cost(\vec{w})}{\partial w_{i}} = \frac{\partial cost(\vec{w})}{\partial net_i} \frac{\partial net_i}{\partial w_{i}} 
-\end{equation*}
-
-% \chrislong{it was at this point where I recalled the dependence of $J$ on $net$; this could be made more transparent when this is first defined. Is this the only nested dependency needed to calculate the $\nabla J(\vec{w})$? You claim below that it is not but it is not immediately apparent where these additional dependencies are introduced in $J$ --- note that, the precise dependency will affect what `version' of the multivariate chain rule is needed.}
-
-When the partial derivatives is computed with respect to a parameter, such as weight or bias, deeper in the network, the dependencies are all the weights and activation function's net values between that weight and the output have to be computed. This is due to the series of equations performed in a sequential manner when executing the forward pass ($\ie$ nested functions as described in Section~\ref{Sec:process}). The chain rule is just the way to compute the partial derivative of the error with respect to any variable in the nested function. The operation of updating all learnable parameters is called backpropagation because the operation starts from the last layer, as the amount of dependencies is lower and then reuses some of the calculation when determining the partial derivative of weights and biases deeper in the network. 
-
-
-
-% \begin{equation*}
-% \quad \Delta \mathbf{w}(m)=-\eta \frac{\partial J(\mathbf{w}(m))}{\partial \mathbf{w}(m)}
-% \end{equation*}
-\subsection{Regularisation techniques}
-Training a machine learning model extensively on a given dataset can often lead to overfitting, a process where the model becomes too tailored to the training data and performs poorly on new, unseen data. In essence, the model learns the noise and random fluctuations in the training data as if they are meaningful patterns. This is particularly likely to happen when the model is complex, with numerous parameters relative to the size of the dataset, or when the training process is not properly regularised. Here we present couple of the most common regularisation techniques used during training to avoid overfitting.
-
-\subsubsection{L1 and L2 Regularisation}
-L1 and L2 regularisation are techniques used in machine learning to prevent overfitting~\cite{ng2004feature} by adding a penalty term to the loss function that the algorithm optimises. By doing so, regularisation constrains the complexity of the model, discouraging it from fitting the training data too closely. This helps the model generalise better to new, unseen data.
-
-\textbf{L1 Regularisation}
-L1 regularisation adds an additional term to the loss function of a model. The loss function is a measure of how well the model fits the training data. By adding this regularisation term, the model is penalised for having large weights (parameters). The key characteristic of L1 regularisation is its tendency to drive some weights to exactly zero, leading to sparse models. This happens because the penalty for having non-zero weights is linear in the weight's values.
-  
-\begin{equation*}
-   C = C^- + \lambda \sum |w_i|, 
-\end{equation*}
-where $C^-$ is the cost without the additional term and $\lambda$ is a hyper-parameter that controls the strength of the regularisation. L1 regularisation is particularly useful when you have a high-dimensional data set (many features) and you suspect that not all features are relevant for prediction. By penalising the magnitude of the learned parameters, L1 regularisation helps simplifying the model by selecting a subset of the available features.
-
-\textbf{L2 Regularisation}
-L2 regularisation also works by adding a penalty term to the model's loss function. The regularisation term in L2 regularisation is the sum of the squares of the model parameters to the loss function. L2 regularisation tends to shrink the parameter values towards zero but, unlike L1 regularisation, it does not set any of them exactly to zero. This shrinking effect helps in reducing overfitting by ensuring that no single weight dominates the model. However, it does not result in feature selection, as L1 regularisation does.
-  
-\begin{equation*}
-   C = C^- + \lambda \sum w_i^2, 
-\end{equation*}
-
-where the additional term $\lambda$ is a hyper-parameter that controls the strength of the regularisation. A $\lambda=0$ reduces the model to its original form, without any regularisation and a $\lambda>0$ penalises large weights, leading to a simpler, more constrained model.
-
-\subsubsection{Dropout}
-Dropout involves randomly setting a fraction of the input units to zero at each update during training time, effectively dropping out those units. By doing this, the neural network becomes less sensitive to the specific weights of neurons and becomes more robust, improving its generalisation capabilities~\cite{srivastava2014dropout}.
-
-During each training iteration, dropout randomly selects some neurons and sets their outputs to zero during the forward and backward passes. The percent of neurons dropped is determined by a \textit{rate} hyperparamether which is set between 0 and 1. To compensate for the dropped neurons, the output from the remaining neurons is often scaled by $1/(1 - rate)$. For example, if dropout rate  is set to 0.5 (meaning approximately 50\% of neurons are dropped), the remaining neuron activations are scaled by a factor of 2 ( $2 = 1/(1 - 0.5)$ ) to maintain the expected output level. Dropout is applied only during training. 
-
-Dropout forces the neural network layers to learn redundant representations that are robust to the absence of some neurons, effectively preventing overfitting~\cite{srivastava2014dropout}. By randomly dropping out neurons, dropout essentially creates a simpler version of the neural network during each training iteration, mimicking the effect of training multiple simpler networks. Dropout is computationally inexpensive compared to other regularisation methods, making it faster and easier to implement.
-
-
-\section{Evaluation}
-
-\label{setup}
-A practice not only implemented when training neural networks, but when training any machine learning method in general, is to divide the dataset into a training, validation, and test subsets.
-
-The training data serves as the foundational set on which the neural network learns the patterns or relationships in the data. Through multiple epochs, the model adjusts its internal parameters to minimise the loss function, which measures the difference between its predictions and the actual outcomes (see Section~\ref{sec:training}).Typically, the largest portion of the data is allocated for training. For example, in an 80-10-10 or 70-15-15 split, 70-80\% of the data might be used for training. It's essential that the training set is representative of the task that needs to be learned to ensure that the model learns the general trends and nuances across all classes or outcomes. The validation set serves as an unbiased benchmark during the training phase to evaluate the model's performance. It is also used for hyperparameter tuning and model selection. Typically the validation set is smaller than the training set but large enough to be statistically significant, perhaps 10-15\% of the total dataset. If the model learns too well on the training data, it may overfit and perform poorly on new data. Assessing if that is the case is the main purpose of the validation set. The test set provides the final evaluation metric for the model. Since it has not been seen by the model during training or validation, it represents how well the model generalises to completely new, unseen data. Like the validation set, the test set is generally smaller than the training set but large enough to offer statistically significant results, , again it is often around 10-15\% of the total data. It's crucial that the test data is entirely independent of the training and validation sets to offer an unbiased evaluation metric.
-
-Before splitting, it’s often good to shuffle the data to ensure randomness and that each split is representative. Despite this, some tasks impose restrictions on the way data can be shuffled. For instance, in classification problems, maintaining the same ratio of classes in each subset is often important, especially when the dataset is imbalanced. In time-series problems, random shuffling is generally not done, and chronological splits are used to simulate real-world scenarios. Understanding how to appropriately divide and use these subsets of data is critical for training and evaluating robust and effective neural network models that not only learns how to perform on the training data but also generalises well to new data.
-
-
-\subsection{Evaluation Metrics}
-\label{sec:eval}
-Evaluation serves as a feedback mechanism, helping to identify the aspects of the model that need improvement. In critical applications like healthcare, autonomous driving, and finance, a poorly evaluated neural network can have dire consequences, including risking human lives. Rigorous evaluation is not just a good practice but a moral imperative in such cases. The following section will delve into the various evaluation metrics commonly used to assess the performance of neural networks. These metrics provide quantitative ways to measure the effectiveness, reliability, and overall quality of the model.
-
-\subsubsection{Accuracy}
-
-Accuracy is defined as the ratio of correctly classified samples to the total number of samples. 
-\begin{equation*}
-    \text{Accuracy} = \frac{\text{Number of Correct Predictions}}{\text{Total Number of Predictions}} 
-\end{equation*}
-
-Accuracy is most useful when the classes are balanced -- if one class vastly outnumbers the other, a high accuracy can be misleading. For example, if 95\% of the samples are of Class A, predicting Class A for all samples would still yield a 95\% accuracy. This metric also imposes that the misclassification for one class should be no worse than the misclassification for another. Note that this is not the case for all domains. For instance in medical diagnostics, missing a positive case for a critical condition like cancer is generally considered far worse than falsely identifying someone as having cancer when they do not. In this case, misclassification for one class (false negatives for cancer presence) is weighted more heavily than misclassification for false positives.
-
-Similarly, in fraud detection, failing to identify a fraudulent transaction could have more severe repercussions, such as financial loss or legal complications, compared to falsely flagging a legitimate transaction as fraudulent. Hence, in such applications the misclassification costs are different and accuracy can not give the required information to evaluate the model in the desired way. 
-
-\subsubsection{Precision, Recall and F1 Score}
-
-Precision, Recall and F1 Score are used when the dataset is imbalanced and when the cost of false positives and false negatives are different, precision and recall offer a more nuanced evaluation. 
-
-\textbf{Precision}, which is known as the positive predictive value, measures the number of true positives divided by the number of true positives and false positives. A high precision value indicates a low rate of false-positive errors, meaning that when the model predicts a positive class, it is likely correct. A low precision score implies that many of the instances the model predicts as positive actually belong to the negative class, making it a less reliable predictor for the positive class.
-\begin{equation*}
-\text{Precision} = \frac{\text{True Positives (TP)}}{\text{True Positives (TP)} + \text{False Positives(FP)}} 
-\end{equation*}
-While precision gives an idea of how reliable the positive predictions are, it does not show how many actual positive cases are missing (false negatives). Therefore, it is often used in conjunction with other metrics like recall and F1-score for a more comprehensive evaluation.
-
-\textbf{Recall}, which is known as sensitivity, measures the number of true positives divided by the number of true positives and false negatives. Recall measures the ability of a classifier to correctly identify all relevant instances, essentially asking, "Of all the possible positive labels, how many did the model correctly identify?". A high recall value means that the false negative rate is low, implying the model is good at identifying positive instances as such. A low recall score indicates a high number of false negatives, meaning the model often fails to identify positive instances.
-\begin{equation*}
-\text{Recall} = \frac{\text{True Positives(TP)}}{\text{True Positives(TP)} + \text{False Negatives(FN)}} 
-\end{equation*}
-Recall is particularly useful when the cost of false negatives is high. For example, in medical diagnostics, failing to identify a disease could have severe consequences. Generally, improving recall may result in a decrease in precision, and vice versa. This trade-off occurs because increasing the sensitivity of the model for identifying positive instances often leads to more false positives. This makes it challenging to optimise for both. While they offer a more nuanced view, using just precision or recall alone can still be misleading, which is why the F1 score is often used as a single metric that combines both.
-
-\textbf{F1 Score}, a harmonic mean of precision and recall, combines both precision and recall into a single value, aiming to provide a more comprehensive view of a model's performance. It is especially useful when neither precision nor recall can be ignored. 
-\begin{equation*}
-\text{F1 Score} = 2 \times \frac{\text{Precision} \times \text{Recall}}{\text{Precision} + \text{Recall}} 
-\end{equation*}
-An F1 score close to 1 indicates a good balance of precision and recall, and thus a good model, whereas close to 0 indicates a poor model, possibly heavily biased or just inaccurate. The F1 score assumes equal importance of the two, which may not always be the case in specific applications. In datasets where one class is significantly outnumbered by the other, F1 score can give a better measure of the model's performance compared to accuracy.
-
-\subsubsection{AUC-ROC (Area Under the Receiver Operating Characteristic Curve)}
-
-The ROC curve is a graphical representation of the true positive rate (Recall) against the false positive rate, at various threshold settings (see Figure~\ref{Fig:Roc}). The method measures the area under the curve, providing a scalar value that quantifies the model's performance across all possible classification thresholds. A value of 1 represents a perfect model, while a value of 0.5 represents a random classifier. Typically used in binary classification problems and useful for comparing different models' performances. AUC-ROC may provide an overly optimistic view of the model's performance if there is a significant class imbalance. While AUC-ROC gives a single scalar value, it doesn't provide specifics on what threshold should be used for classification, which may require further investigation.
-
-\begin{figure}[ht!]
-	\begin{center}
-		\includegraphics[width=0.6\linewidth]{Figures/ROC.png}
-	\end{center}
-	\caption{Illustration of a ROC curve~\cite{ROC}}
-	\label{Fig:Roc}
-\end{figure} 
-
-
-These metrics are foundational tools for evaluating classification models. The choice of which metric to use often depends on the specific application, the nature of the data, and the cost of different types of errors. By understanding the pros and cons of each metric, one can better evaluate the model's performance in a manner most aligned with the objectives of the application.
-
-
 \section{Conclusion}
 
 Artificial neural networks are widely used for their computational capabilities --- they can learn and generalise even if they are trained on incomplete or conflicting data sets and do not need explicit human instructions. Importantly, neural networks possess remarkable fault tolerance once deployed. They can produce reliable outputs even if significant portions of the network are corrupted or lost. This makes them highly adaptable and useful in a range of applications where traditional algorithms fall short.
 
 Starting with the underlying motivations and general structure, this chapter established the foundation for understanding how data is processed and transformed through the layers of a neural network. A detailed look into the constituent elements like neurons, layers, and activation functions shed light on their specific roles in the data transformation process.
 
-The training subsection presents backpropagation, as the main algorithm through which neural networks learn. Possible regularisation changes to the traditional loss function are also explored, as a way to avoid overfitting. Next, we delved into the metrics needed to assess the performance of neural networks effectively. These metrics primarily inform us about how well the model has been trained, but not necessarily what the model has learned or how it arrives at its decisions. While measures like accuracy, precision, and F1-score provide valuable insights into the model's performance, they don't shed light on the model's internal workings.
-
-In the following chapter, we will delve into explainability metrics, which are designed to address this very issue. These metrics aim to provide insights into what the neural network has actually learned and how it makes its decisions, offering a more comprehensive understanding of the model beyond its performance indicators. Understanding what a model has learned is crucial for trust, validation, and potential debugging of neural network models, particularly in critical applications where explainability is of paramount importance.
+In the following chapter, we will delve into explainability metrics, which are designed to address the issue of the nontransparent nature of what deep neural network learn. These metrics aim to provide insights not only into what the neural network has actually learned, but also how important the features are, offering a more comprehensive understanding of the model. Understanding what a model has learned is crucial for trust and validation of neural network models, particularly in critical applications where explainability is of paramount importance.

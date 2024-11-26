@@ -37,7 +37,10 @@
 \newcommand{\REVEAL}{\textsc{Reveal}}
 \newcommand{\DBSCAN}{\textsc{Dbscan}}
 \newcommand{\SAM}{\textsc{Sam}}
+% \usepackage[ruled,vlined]{algorithm2e}
+% \usepackage{algpseudocode}
 
+\usepackage{algpseudocode}
 \newcommand{\abs}[1]{\left|{#1}\right|}
 % \newcommand{\passto}{\hookrightarrow}
 \newcommand{\NN}{\mathcal{N}}
@@ -81,7 +84,7 @@
 \usepackage{amsthm}
 \theoremstyle{definition}
 \newtheorem{definition}{Definition}[section]
-
+\usepackage{tabularx}
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
 \newcommand{\cnet}[1][k]{\text{$c$-}\net[#1]}
@@ -100,11 +103,16 @@
 % ]}
 \usepackage[framemethod=TikZ]{mdframed}
 \usepackage{amsmath}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
 \usepackage{cleveref}
 \usepackage[most]{tcolorbox}
 
+\usepackage{amsthm}
+% Define the custom Definition environment
+\Crefformat{tcb@cnt@Definition}{Definition~#2#1#3}
 
-\newtcbtheorem[auto counter, number within = chapter]{Definition}{Definition}{
+\newtcbtheorem[auto counter, number within=chapter]{Definition}{Definition}{
   enhanced,
   attach boxed title to top left={
     yshift=-0.1in,xshift=0.15in
@@ -116,10 +124,10 @@
   boxed title style={
     sharp corners,
     size=small,
-    colback= blue!10,
+    colback=blue!10,
     colframe=blue!10,
-  } 
-}{prf}
+  }
+}{def}
 
 \newtcbtheorem[auto counter, number within = chapter]{Desideratum}{Desideratum}{
   breakable,
@@ -177,7 +185,7 @@
   } 
 }{prf}
 
-
+\usepackage{longtable}
 \usepackage{footnote}
 \usepackage{etoolbox}
 \BeforeBeginEnvironment{Example}{\savenotes}
@@ -198,7 +206,7 @@
 \makeindex
 
 \begin{document}
-\title{Generating faithful and interpretable explanations of deep neural networks}
+\title{Towards More Interpretable and Faithful Explanations in Deep Neural Networks}
 \author{Sophia Vesselinova Kalanovska}
 \date{December 2023}
 \dept{Department of Informatics}
@@ -209,30 +217,35 @@
 
 
 \prefacesection{Abstract}
-Deep Neural Networks have received significant attention due to their unparalleled capacity to learn features from input data, thereby enhancing task performance. However, the learned features are not encoded in a form that is understandable by humans, making it difficult to ensure that decisions are not simply a result of spurious correlations in the data. With the goal of addressing this issue, interpretability of neural networks has become a prominent research direction. However, attempts to generate explanations have resulted in an apparent trade-off between faithfulness and interpretability. In short, the more faithful (i.e. accurate) the explanation with respect to the underlying model, the harder it is for humans to understand.
+Deep Neural Networks (DNNs) have gained significant attention for their ability to learn features from data, leading to improved performance across various tasks. However, the features they learn are often not understandable to humans, making it challenging to ensure that the models' decisions are not based on irrelevant patterns in the data. This has sparked a growing interest in making DNNs more interpretable. Yet, attempts to explain these models often face a trade-off between accuracy of the explanation (faithfulness) and ease of understanding (interpretability). Explanations that closely reflect the model's internal workings tend to be too complex for human comprehension, while simpler explanations may not accurately represent the model's behavior.
 
 \noindent
-This thesis presents three major contributions — the first is the overarching framework that harmonises faithfulness and interpretability, the second and third contributions represent novel methods for implementing this overarching framework. In the proposed framework, instead of assigning significance scores to individual features or simplifying inputs into binary importance, correlated features are grouped together and a singular importance score is assigned to each cluster. A second contribution comprises a set of tools as to how features can be best clustered for the simplified explanation to be meaningful as well as interpretable. The final contribution defines two sets of forward-propagation rules each with their own advantages and disadvantages for assigning an importance value to a cluster of features.
+This issue is particularly pronounced with image data due to its high dimensionality. Images consist of thousands to millions of pixels, each contributing subtly to the overall picture, making it difficult to determine which features most influence the model's decisions. Existing faithful methods assign importance scores to every individual pixel, resulting in detailed but overwhelming explanations. Conversely, more interpretable methods simplify this by reducing features to basic importance levels, which can obscure critical information.
 
 \noindent
-This detailed account of each feature cluster’s role enhances the clarity of the model's complex decision-making. However, despite this detail, interpretability is not compromised, as each feature cluster is assigned a singular, clear metric. Additionally, these individual importance scores allow for a hierarchy of feature clusters, displaying which most influence the model's decision. Such an ordered representation not only simplifies the explanation for human understanding but also retains the subtle distinctions among features that are crucial for a faithful representation of the model's behaviour. The validity of these methods are demonstrated on large-scale pre-trained convolutional neural networks, and performance is compared with existing relevance methods. The results show a promising solution for interpreting deep neural networks, providing valuable insights into the inner workings of these models while maintaining human-comprehensibility and faithfulness to the model.
+This thesis introduces a method to enhance the ease of interpretability without sacrificing faithfulness. By grouping  features together and assigning a single importance value to each group, the approach reduces the number of elements one needs to consider, making explanations more manageable. The more challenging issue is assigning a single value to a group of features that is representative of the importance of that group given the model’s function.
 
+\noindent
+To achieve this, two sets of rules for propagating importance for a group of features is proposed. The first set reverses the well-known technique of Layer-wise Relevance Propagation (LRP). While theoretically sound, this approach is prohibitively computationally demanding. In response, this thesis presents a second comprehensive set of propagation rules that distribute importance through network layers by focusing only on the grouped features. This required adjusting the scaling of learned parameters, like biases, to prevent the importance signals from becoming too large or too small, which could distort the explanations. The proposed method keeps the contributions within the normal range of layer outputs, ensuring a balanced influence of all parameters.
+
+\noindent
+The effectiveness of this method is demonstrated using large-scale, pre-trained convolutional neural networks, comparing performance with existing relevance techniques. The results indicate a promising solution for interpreting deep neural networks, offering valuable insights into their inner workings while maintaining both human comprehensibility and fidelity to the original model.
 
 \prefacesection{Acknowledgements}
 
-First and foremost, I would like to thank to my partner, Charles Higgins. Without your constant support, patience, and encouragement, the completion of this thesis would not have been possible. I find it hard to sufficiently express just how much your help has meant to me and how thankful I am to have you by my side.
+First and foremost, I would like to thank to my partner, Charles Higgins. Without your constant support and encouragement, the completion of this thesis would not have been possible. I find it hard to sufficiently express just how much your help has meant to me and how thankful I am to have you by my side.
 
 \noindent
-My supervisor, Dr. Christopher Hampson, deserves special mention for his support and readiness to share his extensive knowledge. His numerous enlightening whiteboarding sessions have been instrumental in shaping my academic development. Further thanks are owed to Dr. Daniele Magazzeni for giving me the opportunity to do a PhD and Dr. Michael Luck for his critical role in overseeing the majority of my PhD journey. His guidance in organising my thoughts and work are deeply appreciated.
+My supervisor, Dr. Christopher Hampson, deserves special mention for his support and readiness to share his extensive knowledge. His numerous enlightening whiteboarding sessions have been instrumental in shaping my academic development. Further thanks are owed to Dr. Daniele Magazzeni for giving me the opportunity to do a PhD and Dr. Michael Luck for his critical role in overseeing part of my PhD journey.
 
 \noindent
 I am grateful for the support provided by the Center for Doctoral Training in Safe and Trusted AI, which offered me a sponsorship essential for undertaking this PhD.
 
 \noindent
-I also extend my gratitude to my friends, fellow PhD students and undergraduate and postgraduate students I have had the privilege of teaching over the years. Your presence and support have been crucial in making these past few years not just productive, but also enjoyable. 
+I also extend my thanks to the undergraduate and postgraduate students I have had the privilege of teaching over the years. Your presence and support have been crucial in making these past few years not just productive, but also enjoyable. 
 
 \noindent
-Above all, I owe a heartfelt thanks to my family for their endless support and understanding throughout my long education. To my parents, whose belief in me has been unwavering from my earliest days in school to the completion of this PhD. Your collective faith and love have been a constant source of motivation and strength.
+Above all, I owe a heartfelt thanks to my family for their endless support and understanding throughout my long education. To my parents, whose belief in me has been unwavering from my earliest days in school to the completion of this PhD. Your faith and love have been a constant source of motivation and strength.
 
 \noindent
 Thank you all for your part in this journey.
@@ -244,17 +257,157 @@ Thank you all for your part in this journey.
 % Report Content
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % You can write each chapter directly here or in a separate .tex file and use the include command.
+ % Include this in the document preamble
+
+
+\prefacesection{Summary of Notation}
+
+\begin{longtable}{p{0.2\textwidth} p{0.8\textwidth}}
+
+    \hline
+    \textbf{Symbol} & \textbf{Meaning} \\
+    \hline
+    \endfirsthead
+
+    \hline
+    \textbf{Symbol} & \textbf{Meaning} \\
+    \hline
+    \endhead
+    \endfoot
+    \endlastfoot
+
+$\mathbb{R}$ & Set of real numbers \\
+$\mathbb{N}$ & Set of natural numbers \\
+$\NN$ & Neural network \\
+$\Lambda$ & Set of layers in the neural network \\
+$k$, $j$ & Indices over layers \\
+$N$ & Output layer index \\
+$\lambda_i$ & Function of layer $i$ \\
+$f_k$ & Function associated with layer $k$ \\
+$n_j$, $m_k$ & Input and output dimensions of layer functions \\
+$j \passto k$ & Layer precedence relation (layer $j$ precedes layer $k$) \\
+$[\vec{a}_j]_{j \passto k}$ & Activations from layers preceding layer $k$ \\
+$[\vec{c}_j]_{j \passto k}$ & Contributions from layers preceding layer $k$ \\
+$\vec{x}$ & Input vector to a neuron or layer \\
+$x_i$ & $i$-th component of $\vec{x}$ \\
+$d$ & Dimension of input vector or neuron \\
+$\vec{w}_j$ & Weight vector for neuron $j$ \\
+$w_{ji}$ & Weight from input $x_i$ to neuron $j$ \\
+$w_{j0}$ & Bias term for neuron $j$ \\
+$W_j$ & Weight matrix from layer $\Lambda_j$ to $\Lambda_k$ \\
+$W_k$ & Weight matrix at layer $k$ \\
+$W_j^\intercal$ & Transposed weight matrix from $\Lambda_j$ to $\Lambda_k$ \\
+$\vec{b}_k$ & Bias vector at layer $k$ \\
+$t$ & Transfer function \\
+$t_i$ & Transfer function of neuron $i$ \\
+$\act$ & Activation function \\
+$\act_i$ & Activation function of neuron $i$ \\
+$\net$ & Output of transfer function of neuron k \\
+$y_j$ & Output of neuron $j$ \\
+$\vec{a}_j$ & Activation vector at layer $\Lambda_j$ \\
+$X$ & Input to a layer or function \\
+$W$ & Kernel (filter) in convolution \\
+$\ast$ & Convolution operation \\
+$b$ & Bias term in convolution \\
+$s_x$, $s_y$ & Stride values (horizontal and vertical) \\
+$f_h$, $f_w$ & Filter height and width \\
+$\operatorname{Conv}$ & Convolution operation \\
+$t_{conv}$ & Convolution transfer function \\
+$\operatorname{MaxPooling}$ & Max pooling operation \\
+$t_{max}$ & Max pooling transfer function \\
+$\operatorname{AvgPooling}$ & Average pooling operation \\
+$t_{avg}$ & Average pooling transfer function \\
+$d_1, d_2, \ldots, d_n$ & Dimensions of a feature map or tensor \\
+$H$, $W$, $D$ & Height, width, and depth of image data \\
+$F$ & Input feature map or complex input feature \\
+$F_i$ & Feature vector at layer $i$ \\
+$F_{i,j,k}$ & Value at position $(i,j,k)$ in a feature map \\
+$i$, $j$, $c$ & Output indices (spatial and channel) \\
+$\mathcal{P}_l$ & Set of pixels in a pooling patch \\
+$|\mathcal{P}_l|$ & Number of pixels in $\mathcal{P}_l$ \\
+$\operatorname{ReLU}$ & Rectified Linear Unit activation function \\
+$\operatorname{tanh}$ & Hyperbolic tangent activation function \\
+$\operatorname{sigmoid}$ & Sigmoid activation function \\
+$\epsilon$ & Small constant for numerical stability \\
+$\gamma$, $\beta$ & Scale and shift parameters in batch normalization \\
+$\mu$, $\sigma^2$ & Mean and variance in batch normalization \\
+$\sigma$ & Standard deviation in batch normalization \\
+$\hat{x}$ & Normalized input in batch normalization \\
+$t_{norm}$ & Batch normalization transfer function \\
+$\sigma_x^2$ & Variance of input $\vec{x}$ in batch normalization \\
+$\vec{R}_k$, $R_j$ & Relevance vectors at layer $\Lambda_k$, $\Lambda_j$ \\
+$R_j^\prime$ & New relevance vector at layer $\Lambda_j$ \\
+$R_{jk}$, $R_{jk}^\prime$ & Relevance matrices between layers $\Lambda_j$ and $\Lambda_k$ \\
+$P_{jk}$ & Proportion matrix of relevance from $\Lambda_j$ to $\Lambda_k$ \\
+$\alpha$, $\beta$ & Parameters in the Alpha-Beta rule in LRP \\
+$R_j^+$, $R_j^-$ & Positive and negative relevance components at $\Lambda_j$ \\
+$\vec{c}_j$, $\vec{c}_k$ & Contribution vectors at layers $j$, $k$ \\
+$\vec{c}_0$ & Contribution vector at the input layer \\
+$\cnet^-$ & Contribution net input before bias at layer $k$ \\
+$P_k$ & Scaling matrix for adjusting bias at layer $k$ \\
+$\vec{s}_k$ & Relevance scaling factors at layer $\Lambda_k$ \\
+$\vec{t}_k$ & Transformation function from $\Lambda_j$ to $\Lambda_k$ \\
+$J_{kj}(\vec{x})$ & Jacobian matrix of $\vec{t}_k$ with respect to $\vec{x}$ \\
+$\vec{m}$, $\vec{m}_k$ & Mask vectors over inputs or at layer $k$ \\
+$Q_k$ & Ratio of new to old relevance at layer $\Lambda_k$ \\
+$\odot$ & Element-wise multiplication operator \\
+$||\cdot||$ & Element-wise absolute value function \\
+$\nabla$ & Gradient operator \\
+$\vec{1}$, $\vec{0}$ & Vectors of ones and zeros \\
+\end{longtable}
+
+
+\prefacesection{Summary of Terms and Acronyms}
+
+\begin{longtable}{p{0.25\textwidth} p{0.75\textwidth}}
+
+    \hline
+    \textbf{Term/Acronym} & \textbf{Meaning} \\
+    \hline
+    \endfirsthead
+
+    \hline
+    \textbf{Terms/Acronym} & \textbf{Meaning} \\
+    \hline
+    \endhead
+    \endfoot
+    \endlastfoot
+        ANN & Artificial Neural Network \\
+        DNN & Deep Neural Network \\
+        MLP & Multi-Layer Perceptron \\
+        CNN & Convolutional Neural Network \\
+        RNN & Recurrent Neural Network \\
+        LSTM & Long Short-Term Memory network \\
+        DQN & Deep Q-Network \\
+        VGP & Vanishing Gradient Problem\\
+        BN & Batch Normalisation \\
+        IFM & Input Feature Map \\
+        ICS & Internal Covariate Shift \\
+        ReLU & Rectified Linear Unit activation function\\ 
+        \text{Leaky~ReLU} & Leaky Rectified Linear Unit activation function \\
+        LRP & Layer-wise Relevance Propagation method \\
+        VGG16 & Visual Geometry Group 16-layer network (a CNN architecture) \\
+        OOM & Out of Memory Error \\
+        Jacobian Matrix & Matrix of all first-order partial derivatives of a vector-valued function \\
+        AD & Automatic Differentiation \\
+        CTC & Contribution to Classification \\
+        CTN & Contribution to Neuron \\
+        HM & Relevance heatmap \\
+        SAM & Segment Anything Method \\
+        DBSCAN & Density-Based Spatial Clustering of Applications with Noise \\
+\end{longtable}
+
 
 \include{Chapters/Introduction}
 \include{Chapters/Background}
 \include{Chapters/LiteratureReview}
-\include{Chapters/Framework}
 \include{Chapters/IdentifyingFeatures}
+% \include{Chapters/Problem_relevance}
 \include{Chapters/SingleRelevanceValue}
 \include{Chapters/Relevance_Propagation_Rules}
 % \include{Chapters/Contribution/Feature_Contribution}
 \include{Chapters/Contribuition_New}
-\include{Chapters/Results}
+% \include{Chapters/Results}
 % \include{Chapters/IdentifyingRelationships}
 % \include{Chapters/LabelingFeatures}
 % \include{Chapters/ProfessionalIssues}

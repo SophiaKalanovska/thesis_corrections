@@ -1,0 +1,52 @@
+\chapter{Relevance Distribution Tracing}
+\label{chapter:assigning}
+
+\section{Introduction}
+
+The assignment of a singular value of importance to each complex input feature is a crucial
+step in achieving a balance between the interpretability and faithfulness of the explanation.
+
+Rather than depending on aggregation techniques that may obscure critical details, this chapter proposes a method that evaluates the actual influence of complex input features during the forward pass of the network. 
+
+\section{Challenges with Aggregation of Relevance Scores}
+
+\subsection{The Naive Approach}
+
+The naive way to assign a single value is by aggregating the relevance scores provided by an interpretability method to the individual features within the cluster, thereby offering a summarized measure of the cluster's significance. Various aggregation methods, such as mean, median, or weighted sum, could be considered based on the application.
+
+\subsection{Limitations of Aggregation Methods}
+
+Aggregating relevance scores into a single value effectively compresses the diversity and granularity of the information contained within the cluster. This can be problematic when features have vastly different relevances that become obscured through aggregation. Not only can it lead to a loss of information, but it can also introduce biases or distortions. For example, taking a simple mean might be sensitive to outliers, while a median might not capture the influence of exceptionally important features well. The single value of relevance should be equally representative of all input features in the cluster, which could be problematic if the cluster contains a diverse range of features with different relevance scores, as no aggregation metric can capture this diversity with a single value.
+
+In Figure~\ref{Fig:aggregating}, the aggregated scores of various clusters are presented. The method used to aggregate the scores involves both the median and the mean. No notable difference between median and mean can be seen; however, size and composition have a tremendous effect on the values assigned.
+
+\begin{figure}[ht!]
+	\centering
+	\includegraphics[width=0.9\linewidth]{Figures/Mean_median.pdf}
+	\caption{This figure is divided into two sections: ``Mean of Relevances'' (top) and ``Median of Relevances'' (bottom). It consists of three columns, with the left being the baseline image, the center showing a heatmap of regional relevance using Layer-wise Relevance Propagation (LRP), and the right displaying a color-coded relevance representation, where the image is overlaid with a gradient representing regions of interest, accompanied by a color scale legend for quantitative interpretation.}
+	\label{Fig:aggregating}
+\end{figure} 
+
+For instance, smaller clusters, exemplified by those representing the pegs of the violin, showcase both a high mean and a high median. This suggests that the majority of input features within these clusters have high relevance, leading to their elevated aggregated scores.
+
+Conversely, the larger cluster representing the body of the violin exhibits a different trend. The violin's cluster consists of areas with significant variations in relevance—some areas possess exceptionally high relevance while others do not. This heterogeneity within the cluster results in both a mean and median that are relatively low. This is particularly interesting as the mean and median values for the violin's cluster might not give a comprehensive view or representation of all the input features that constitute it. It underscores the importance of understanding the individual contributions within a cluster rather than just relying on aggregated metrics, as they might mask the nuances and variations present within larger, more diverse clusters.
+
+\section{Interdependence of Features in Neural Networks}
+
+Each feature in the input feature map undergoes various transformations as it passes through the layers of a network. These transformations are influenced by the surrounding features, affecting the ultimate relevance that a feature has. For example, pooling layers aggregate information from kernels of features, inherently making the output a function of multiple input features (see Section~\ref{section:avglayer}). Methods like batch normalization standardize features based on the distribution formed by all features, further intertwining their relevances (see Section~\ref{section:bn}). Current explainability methods that focus on properties such as fidelity, input invariance, handling saturation, and sensitivity assign the value of relevance of each feature in the input space given the output and its connection to other input features~\cite{SimonyanVZ13, SpringenbergDBR14, bach2015pixel, SelvarajuCDVPB20, ChattopadhyaySH18, abs-1908-01224, SmilkovTKVW17}. Therefore, each feature's assigned value is relative to every other feature in the input feature map. When aggregating the relevance from the same cluster, the relationship between the complex input feature relevance and other complex input feature relevances will not be the same as the relationships between the features that comprise it. A further problem with aggregation methods is that the relevance of distinct features in the input space can come from the \emph{same} more complex feature detected in the deeper layers of the network. Hence, in situations where a cluster contains highly correlated features, the aggregation might amplify this correlation, leading to overemphasis or underrepresentation of certain aspects in the data. Conversely, in cases where clusters contain uncorrelated or weakly related features, the aggregated score might dilute the individual feature's significance.
+
+The inherent interdependence between features makes the process of untangling individual contributions challenging. For instance, when a convolutional layer identifies a specific pattern in an image, it doesn't just recognize a single pixel but rather a combination of neighboring pixels forming a pattern. So, if one were to assign importance to a single pixel in this scenario, it would not accurately reflect the true importance. Instead, the combined pattern of several pixels holds the true importance. When features are aggregated into clusters, this interdependency causes the problems described so far. This is particularly problematic in cases where the network has many layers and complex interactions between features, as some features may seem relevant but might not have a direct or substantial importance to the final output.
+
+\section{Forward Pass Approach to Assigning a Single Value of Relevance to  A Complex Input Feature}
+
+In light of these considerations, this thesis introduces a general approach for assigning an importance value to a complex input feature $CF$. Instead of determining the relevance by reversing the functions at each layer of the neural network~\cite{ZeilerKTF10, SpringenbergDBR14, SimonyanVZ13, bach2015pixel, LapuschkinBMMS16, ShrikumarGK17, SundararajanTY17}, we propose a \emph{forward-pass approach} that determines the influence only the complex input feature had during the inference (forward pass) through the network.
+
+\section{Conclusion}
+
+In this chapter, we have critically examined the challenges associated with assigning a singular importance value to complex input features in neural networks. We highlighted the limitations of aggregation methods, which often obscure the nuanced contributions of individual features due to loss of information, introduction of biases, and inability to account for the interdependence of features inherent in neural network architectures.
+
+To address these challenges, we introduced the \emph{Contribution to Classification} (\CTC) method, a novel forward-pass approach that quantifies the influence of complex input features during the inference process. Unlike aggregation methods that rely on reversing the functions at each layer or aggregating relevance scores, the \CTC\ method provides a more faithful and interpretable measure of feature importance by evaluating how each complex input feature contributes to the network's output at every layer.
+
+We demonstrated the differences between the \CTC\ method and traditional inference, particularly in the context of max pooling and ReLU layers, illustrating how the \CTC\ method captures feature contributions more accurately by considering the actual computational paths taken during the forward pass.
+
+The introduction of the \CTC\ method offers a framework that preserves the fidelity of feature contributions while enhancing interpretability. In the subsequent chapters, specifically Chapters~\ref{chapter:revLRP} and~\ref{chapter:REVEAL}, we will delve into the specific rules and modifications to the forward pass that operationalize the \CTC\ method. We will explore how this method can be applied to different types of neural network architectures and discuss its implications for model interpretability and transparency.
