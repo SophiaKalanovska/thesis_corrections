@@ -1,0 +1,227 @@
+\chapter{Relevance distribution tracing}
+\label{chapter:revLRP}
+\section{Introduction}
+
+The process of attributing importance to a complex input features in deep neural networks is a critical step in understanding how these models make decisions. This chapter introduces a concrete approach to this task, expanding on the second part of our framework for faithful and interpretable explanations in deep neural networks (see Chapter~\ref{chap:framework}). There are two primary methods to address the challenge of assigning a single value of relevance to complex input features: forward pass retracing, which inspects the contribution of complex input feature to the output with respect to the inference step (see Chapter~\ref{chapter:REVEAL}), and reverse relevance distribution tracing, which inspects part of the input with respect to the distribution of relevance attributed to it by an explainability method, which we explore in depth in this chapter.
+
+
+The method chosen for reversal in this context is Layer-wise Relevance Propagation (\LRP\/)~\cite{bach2015pixel}. This decision is largely influenced by the faithfulness provided by the approach. The method is input invariant and it considers the contribution of each neuron relative to others, which helps in understanding the impact of saturated features, while also producing different results when drastic changes occur in the input and output. By tracing the relevance of a part of the input and assigning a single value of relevance to the entire region, this method preserves the original faithfulness, while improving interpretability of the explanation. The reverse relevance distribution tracing approach utilising \LRP\/ involves retracing the relevance that has been assigned to each layer from the specific input features back. By applying the reverse rules of \LRP\/ (see Section~\ref{rev_LRP}), insight is gained not only into the feature relevance to the the final output but also the relevance that was due to that feature in the middle layers. \LRP, unlike other propagation techniques which can be sensitive to the model's non-linearities and high-dimensional interactions, is designed to conserve the relevance signal across layers. This conservation principle ensures that the relevance attributed to the output is precisely apportioned back through each layer, ultimately distributing it over the input features in a manner that reflects their contribution to the final decision. Therefore, the choice to reverse \LRP\/ rules allows for each complex input feature to have a single value of relevance that adhers to the input feature's influence on the network's decision-making process. 
+
+
+In Figure~\ref{Fig:thee_stage} one can observe a comprehensive illustration that encapsulates the process of inference, followed by relevance assignment and then forward distribution of relevance in a neural network. The leftmost portion of the figure displays a neural network during the forward inference step, where the input data is processed through successive layers to yield an output. Highlighted paths indicate the flow of data, which is visualised in yellow. At the centre figure the backward pass phase is illustrated, where relevance from the output is traced back through the network to the input features, employing \LRP\/. This process is visualised by red moving from the output neuron back through the hidden layers, eventually reaching the input layer. Each backward step represents the application of \LRP\/ rules to redistribute relevance to preceding neurons, demonstrating how contributions to the final decision are mapped back to individual input features. The rightmost panel of the figure depicts the novel forward distribution of relevance from selected features and highlights the process of reversing the \LRP\/ rules.
+A subset of input features is shown as the starting point for this stage and the proportion of the relevance that corresponds to this subset is distributed passing through the relevant pathways in the network once more. The redistribution is shown in green and the flow of information is from the input layer to the output. 
+
+\begin{figure}[ht!]
+\begin{center}
+\includegraphics[width=\linewidth]{Figures/thee_stage.pdf}
+\caption{A three-phase neural network process is depicted, showcasing initial inference, Layer-wise Relevance Propagation (LRP), and subsequent relevance redistribution of a complex input feature. Starting with data propagation through a network (left), where key contributing pathways are emphasised, the figure progresses to illustrate the tracing of output relevance back to inputs via LRP, and culminates with the forward redistribution of relevance based on selected features ( marked in green), effectively mapping decision contributions within the network.}
+\label{Fig:thee_stage}
+\end{center}
+\end{figure}
+
+
+\section{Basic Rule}
+
+To build on the foundation of \LRP\/, one needs to understand the layer-by-layer relevance propagation in detail. In this first subsection (see Section~\ref{lrp}), the \LRP\/ basic rule is broken down into multiple steps, where each part of the rule is not only described, but the reasoning behind it is explained. This enables the discussion of the contribution in this chapter (see Section~\ref{rev_LRP}) which computes the inverse of \LRP\/ and redistributes the relevance of a single complex feature from the input into the deeper layers of the network.
+
+\subsection{Basic LRP in Detail}
+\label{lrp}
+The basic \LRP\/ rule introduced by~\cite{bach2015pixel} through which relevance is distributed to a given layer $\Lambda_j$ from the consecutive deeper layer $\Lambda_k$ can be decomposed into the following four steps. 
+
+\begin{enumerate}
+    \item In the first step, the authors define a vector-valued function $\vec{t}_k:\mathbb{R}^j\to\mathbb{R}^k$, that maps the activation vector from one layer of the neural network to another. The transformation is defined by the equation:
+\begin{equation*}
+    \vec{t}_k(\vec{x}) = W_j^\intercal\, \vec{x} + \vec{\epsilon}
+\end{equation*}
+   Here, $W_j^\intercal$ represents the transposed weight matrix associated with the connections from layer $\Lambda_j$ to layer $\Lambda_k$, and $\vec{\epsilon}$ is a tiny, nonzero bias vector introduced to ensure numerical stability. This bias vector is crucial because it prevents the possibility of dividing by zero in subsequent steps. The vector $\vec{t}_k$ refers to the weighted sum of the activations from the previous layer, slightly modified by the addition of $\vec{\epsilon}$. Note that this function also bypasses any activation function that may exist in the forward pass after the transformation has been completed.
+   \item Once the modified weighted sum $\vec{t}_k$ is computed, the distribution of relevance scores from layer $\Lambda_k$ to layer $\Lambda_j$ is performed. The relevance vector $R_k$ from the deeper layer $\Lambda_k$ is element-wise divided by $\vec{t_k}$. This division determines how much relevance should be backpropagated to each unit of activation and weighted in the preceding layer. It is defined as:
+\begin{equation*}
+   \vec{s}_k = \vec{R}_k / \vec{t}_k.
+\end{equation*} 
+   The vector $\vec{s}_k$ contains the specific proportion of relevance that is attributed to each element of the activation weighted by $W_k$ in the layer $\Lambda_j$. This step is crucial for later understanding which parts of the preceding layer contributed most to the final decision.
+   Steps 3) and 4) multiply the vector $\vec{s}_k$ that contains the relevances per unit with the activation$\times$weight, so that the final relevance $\vec{R}_j$ for layer $\Lambda_j$ is found.
+   \item The third step multiplies the vector $\vec{s}_k$ with the weights $W_j$ between $\Lambda_j$ and $\Lambda_k$. This is defined as: 
+\begin{equation*}
+   \vec{c_{j}} =  W_j\, \vec{s_{k}}.
+\end{equation*} 
+This step is better achieved through calculating the gradient of \(\vec{t_{k}}(\vec{x})\) with respect to \(\vec{x}\). Given 
+\begin{equation*}
+    \nabla\left [\vec{t_{k}}(\vec{x}) \right] = \nabla\left [W_j^\intercal\, \vec{x} + \vec{\epsilon} \right],
+\end{equation*} 
+the gradient of \(\vec{t_{k}}(\boldsymbol{x})\) with respect to \(\vec{x}\) involves computing the partial derivatives of each component. Since \(\vec{\epsilon}\) is a constant vector, its gradient is zero. The gradient of a linear transformation \(W_j^\intercal\, \vec{x}\) with respect to \(\vec{x}\) is simply the matrix \(W_j^\intercal\) itself. This is because the derivative of a linear transformation is the transformation itself. Therefore, in the linear case
+\begin{equation*}
+    \nabla\left [\vec{t_{k}}(\vec{x}) \right] = W_j^\intercal.
+\end{equation*}
+However, in many neural network architectures, the transformations between layers can be non-linear. In such cases, the gradient \(\nabla\left [\vec{t_{k}}(\vec{x}) \right]\) is not simply the weight matrix, but includes derivatives of the non-linear functions as well. Computing the gradient explicitly allows for the application of the same rule in both linear and non-linear contexts. Modern machine learning frameworks (like TensorFlow, PyTorch, etc.) utilise automatic differentiation, which efficiently computes gradients of complex functions. This abstracts away the manual computation of derivatives and allows the framework to handle the complexities of gradient computation, regardless of whether the transformation is simple (like a linear layer) or complex (like a convolutional or recurrent layer). Therefore, the vector $\vec{c_{j}}$ is given through:
+ \begin{equation*}
+    \vec{c_{j}} = \nabla\left [\vec{t_{k}}(\boldsymbol{x}) \cdot \vec{s_{k}}\right],
+\end{equation*}
+which provides a generalised, flexible, and often more efficient approach to implementing neural network transformations, particularly for complex or non-linear layers.
+   \item Finally, element-wise multiplication is performed to scale the intermediate relevance $\vec{c_{j}}$ to match the activations of the layer. The equation for this is as follows:
+   \[
+   \vec{R}_{j} = \vec{a}_{j} \odot \vec{c}_{j}
+   \]
+   Here, $\vec{a}_{j}$ is the activation vector of layer $\Lambda_j$, and $\vec{c}_{j}$ is the gradient vector computed in the previous step. The operation $\odot$ signifies element-wise multiplication, which scales the gradient by the activation, thus completing the relevance distribution to layer $\Lambda_j$.
+\end{enumerate}
+
+The entire process of \LRP\ can  be combined into a single (compact) equation
+\begin{eqnarray*}
+R_{j}= \vec{a}_{j} \odot \nabla\left [\vec{t_{k}}(\boldsymbol{x}) \cdot \frac{\vec{R}_k}{\vec{z_k}(\vec{a_j})}\right],
+\end{eqnarray*}
+which encapsulates the propagation of relevance from layer $\Lambda_k$ to $\Lambda_j$. However, understanding each step in detail as described in this subsection is critical for appreciating the intricacies of \LRP\ and building on top of it. 
+
+
+A detailed breakdown of the \LRP\ process, from the initial transformation of the activation vector to the final distribution of relevance to a preceding layer, is visualised in the accompanying Figure~\ref{Fig:LRP_breakdown}, which illustrates the application of \LRP\ between two layers, $\Lambda_j$ and $\Lambda_k$. 
+\begin{figure}[ht!]
+\begin{center}
+\includegraphics[width=\textwidth]{Figures/LRP_illustration.pdf}
+\end{center}
+\caption{Illustration of Layer-wise Relevance Propagation (LRP) between Layers $\Lambda_j$ and $\Lambda_k$. This diagram depicts the sequential steps involved in the \LRP\/ algorithm, starting with the transformation of the activation vector from layer $\Lambda_j$ to $\Lambda_k$, followed by the computation of relevance scores, and culminating in the backpropagation of these scores to the preceding layer. Each step is clearly marked to demonstrate the flow and transformation of information, highlighting the critical aspects of \LRP\/, such as the element-wise division by the modified weighted sum, gradient computation, and the final element-wise multiplication with the activation vector. This visualisation serves as a discrete example of the methodology.}
+\label{Fig:LRP_breakdown}
+\end{figure} 
+
+
+\subsection{Inverse Basic LRP Rule for propagating a Complex Input Feature}
+\label{rev_LRP}
+The novel method proposed in this section reverses the propagated relevance of each complex input feature layer by layer starting from the input until the classification is reached. The final value that reaches the classification is the relevance value assigned to the complex input feature. This relevance distribution tracing is performed for all complex input features identified from the clustering algorithm described in Chapter~\ref{chap:clustering}. 
+
+
+Given a trained neural network $\NN=\big(\Lambda,\passto,(f_k)_{k\in \Lambda}\big)$ with a set of layers $\Lambda=\{0,\dots, N\}$, with a single source $0\in \Lambda$, referred to as the input layer and single sink $N\in \Lambda$, referred to as the \emph{output layer}, each $f_k:\bbR^{n_j}\to \bbR^{m_k}$ describes a vector transformation associated with each layer, with the dimensionality conditions that $m_k=\sum_{j\passto k} n_j$, for all $k=1,\dots N$. 
+
+The relevance of a given complex input feature at the input layer 0 $\in \Lambda$ is defined as:
+\begin{equation*}
+    R_0^\prime = \vec{a}_0 \odot \vec{m},
+\end{equation*}
+where $\vec{m}\in \{0,1\}^{n_0}$ is a mask over the complex input feature propagated as detected by the rules in Section~\ref{chap:clustering}, and $\odot$ denotes element-wise multiplication operation. Performing the multiplication with the mask sets to zero all the activations of neurons that are not in the region of the feature propagated.
+
+\begin{enumerate}
+\item
+First the amount of relevance distributed during \LRP\ from layer $\Lambda_k$ to each neuron in layer $\Lambda_j$ is found. \LRP\ as described in Section~\ref{lrp} distributes relevance to $\Lambda_j$ by 
+\begin{eqnarray*}
+R_{j}= \vec{a}_{j} \odot \nabla\left [\vec{t_{k}}(\boldsymbol{x}) \cdot s_k\right].
+\end{eqnarray*}
+To find the amount of relevance distributed from each \emph{neuron} in layer $\Lambda_k$ to layer $\Lambda_j$, a Jacobian matrix $J_k$ (\ie a matrix of the first-order partial derivatives) of the function $\vec{z_k}$ (described in \LRP's step 1) with respect to the activations $\vec{a_j}$ in layer $\Lambda_j$ is scaled by the unit of relevance $\vec{s_k}$. Taking the Jacobian is an analog of performing the gradient operation $\nabla\left [\vec{t_{k}}(\boldsymbol{x}) \cdot \vec{s_{k}}\right]$ without summing across the $j$ dimension.
+\begin{eqnarray*}
+J_{kj}(\boldsymbol{x}) = \frac{\partial\left(\vec{t_{k}}(\boldsymbol{x}) \odot \vec{s_{k}}\right)}{\partial\vec{x}} 
+= \left[\begin{array}{ccc}
+s_{1}\,\frac{\partial z_{1}\, }{\partial x_{1}} & \cdots & s_{1}\frac{\partial z_{1}}{\partial x_{j}} \\
+\vdots & \ddots & \vdots \\
+ s_{k}\frac{\partial t_{k}}{\partial x_{1}} & \cdots & s_{k}\,\frac{\partial t_{k}}{\partial x_{j}}
+\end{array}\right]
+\end{eqnarray*}
+\item
+To find the full analogue of $\vec{a}_{j} \odot \nabla\left [\vec{t_{k}}(\boldsymbol{x}) \cdot s_k\right]$ the Jacobian matrix is scaled by the activation of layer $\Lambda_j$. To perform this element-wise product, a matrix $A_{jk}$ is defined as:
+\begin{eqnarray*}
+A_{jk} = \vec{a}_j\, \vec{1}_k^\intercal = \left[\begin{array}{ccc}
+a_1 & \cdots & a_1 \\
+\vdots & \ddots & \vdots \\
+a_j & \cdots & a_j
+\end{array}\right],
+\end{eqnarray*}
+which consists of the activations $\vec{a_j}$ in layer $\Lambda_j$. The multiplication with the scaled Jacobian matrix $J_{kj}(\vec{a_j})$ is performed:
+\begin{eqnarray*}
+R_{jk} = A_{jk} \odot J_{kj}(\vec{a_j})^\intercal\, 
+\end{eqnarray*}
+which results in a matrix $R_{jk}$ that holds the amount of relevance distributed from each neuron in layer $\Lambda_k$ to each neuron in $\Lambda_j$. To further understand the significance of $R_{jk}$, note that when summed across the $k$ dimension (\ie summing all the rows for each column), the result is the relevance vector $\vec{R}_j$. This is a crucial property as it shows that the total relevance assigned to each neuron in layer $\Lambda_j$ is a cumulative result of the contributions from all neurons in the succeeding layer $\Lambda_k$:
+\begin{equation*}
+    \vec{R}_j = \sum_{k} R_{jk}.
+\end{equation*}
+This property is vital for propagation of relevance, as it ensures that the total relevance in layer $\Lambda_j$ is preserved while being distributed among its neurons based on their contribution to the next layer's activations.
+
+\item Next, the proportion of the relevance of each neuron in layer $\Lambda_k$ to the total relevance of each neuron in layer $\Lambda_j$ is calculated. This allows later to distribute the relevance $\vec{R}_j^\prime$ of the complex input feature at layer $\Lambda_j$ to represent a matrix that holds the amount of relevance each neuron in layer $\Lambda_k$ \emph{would have} distributed to each neuron in $\Lambda_j$, if the complex input feature was the only thing found relevant during the \LRP\ pass.
+
+To find the proportion of the relevance of neurons in layer $\Lambda_k$ to layer $\Lambda_j$ the matrix $R_{jk}$ is divided element-wise by the total relevance $\vec{R}_{j}$ distributed to layer $\Lambda_j$:
+\begin{eqnarray*}
+P_{jk} = R_{jk} / \vec{R}_{j}.
+\end{eqnarray*}
+The resulting matrix contains only values between [0,1]. An important characteristic of the $P_{jk}$ matrix is that when summed across the $k$ dimension, the output is a vector of ones, with dimensionality $j$:
+\begin{eqnarray*}
+\sum_{k} P_{jk} = \vec{1}_j.
+\end{eqnarray*}
+This property is equivalent to $\vec{R}_j = \sum_{k} R_{jk}$, as $\sum_{k} P_{jk}$ being equal to 1s just shows that the percentages sums to 100\% of the $\vec{R}_j$ vector. 
+
+\item The percent matrix $P_{jk}$ of how much each neuron in layer $\Lambda_k$ has contributed to the total amount of relevance for a neuron in layer $\Lambda_j$ is then multiplied by the new relevance $\vec{R}_j^\prime$. To perform this element-wise product, a matrix $R_{jk}^\prime$ is defined as:
+
+\begin{eqnarray*}
+R_{jk}^\prime = \vec{R}_j^\prime \, \vec{1}_k^\intercal = \left[\begin{array}{ccc}
+R_1^\prime & \cdots &R_1^\prime \\
+\vdots & \ddots & \vdots \\
+R_j^\prime & \cdots & R_j^\prime
+\end{array}\right],
+\end{eqnarray*}
+
+which consists of the relevances $R_{j}^\prime$ of the complex input feature in layer $\Lambda_j$. The multiplication with the matrix $P_{jk}$ is performed:
+\begin{eqnarray*}
+R_{jk}^\prime = P_{jk} \odot R_{jk}^\prime, 
+\end{eqnarray*}
+resulting in a matrix $R_{jk}^\prime$, which shows the amount of relevance each neuron in layer $\Lambda_k$ \emph{would have} distributed to each neuron in $\Lambda_j$, if the complex input feature was the only thing found relevant during the \LRP\ pass.
+
+These relevance values cannot simply be summed across the $j$ dimension $\sum_{j}R_{jk}^\prime$, as the resulting vector despite having the same dimensionality as layer $\Lambda_k$ it does not take into account the function between $\Lambda_j$ and $\Lambda_k$. This is referred as the unscaled relevance of layer $\Lambda_k$.
+
+\item To overcome this, the method calculates the aggregate ratio of the unscaled original relevance of layer $\Lambda_k$ and the unscaled complex input feature relevance of layer $\Lambda_k$. This involves summing the elements of both \( R_{jk}^\prime \) and \( R_{jk} \) across the \( j \) dimension, which yields two vectors, representing the aggregated complex input feature relevance and original relevance for each neuron in layer \( \Lambda_k \), represented by:
+\begin{equation*}
+\sum_{j} R_{jk}^\prime \quad \text{and} \quad \sum_{j} R_{jk}.
+\end{equation*}
+Next, a ratio of the unscaled complex input feature relevance to the unscaled original relevance is calculated:
+\begin{equation*}
+  Q_{k} = \frac{\sum_{j} R_{jk}^\prime}{\sum_{j} R_{jk}}.
+\end{equation*}
+This ratio \( Q_{k} \) represents the aggregated proportion of new relevance to old relevance for each neuron in layer \( \Lambda_k \). Stability in the calculation is ensured by assigning zero to $Q_{k}$ whenever \( \sum_{j} R_{jk} \) is zero. This ensures that if there is no relevance propagated from LRP to a neuron, then no relevance can be propagated during the complex input feature relevance propagation. The aggregate ratio \( Q_{k} \) is then used to scale the total relevance \( R_k \) of each neuron in layer \( \Lambda_k \). This is performed by multiplying \( Q_{k} \) element-wise with \( R_k \).
+\begin{equation*}
+    \vec{R}_k^\prime = Q_{k} \odot R_{k}
+\end{equation*}
+The vector \( \vec{R}_k^\prime \) represents the final redistributed relevance for each neuron in layer \( \Lambda_k \) from the complex input feature.
+
+\end{enumerate}
+
+\begin{figure}[ht!]
+\begin{center}
+\includegraphics[width=0.75\textwidth]{Figures/reverse_v2.pdf}
+\end{center}
+\caption{Concrete Example of the Inverse Layer-wise Relevance Propagation Process. This figure visually represents the step-by-step methodology of the inverse LRP as applied within a neural network. Each step of the process is depicted with corresponding mathematical representations and visual aids to enhance comprehension.}
+
+\label{Fig:reverse_LRP_breakdown}
+\end{figure} 
+
+This detailed breakdown of the inverse of LRP process, is further elucidated through a concrete example depicted in the Figure~\ref{Fig:reverse_LRP_breakdown}. This figure illustrates the practical application of the steps outlined in the reverse LRP method, showcasing how the redistribution of relevance is calculated and visualised in a neural network.
+\newpage
+\section{The Alpha Beta Rule}
+\label{section:more}
+
+\LRP\ introduces a weighted version of the basic rule, often referred to as the Alpha Beta rule. The Alpha Beta rule offers several advantages over the basic rule, making it a more effective approach for many applications. One of the primary benefits of the Alpha Beta rule is its flexibility and adaptability to different types of neural network layers and architectures. This rule allows for a more nuanced distribution of relevance scores across the network, taking into account the positive and negative contributions of neurons to the final decision-making process. Unlike the basic rule, which treats all contributions equally, the Alpha Beta rule differentiates between positive (alpha) and negative (beta) contributions, allowing for a more detailed and accurate understanding of how different parts of the network contribute to its output.
+
+Moreover, the Alpha Beta rule can mitigate some of the shortcomings of the basic rule, such as the potential for misleading relevance attributions in networks with mixed positive and negative activations. By separately considering positive and negative contributions, the Alpha Beta rule ensures a more balanced and realistic representation of the influence of each neuron. This is particularly important in complex networks where different layers may have varying impacts on the final output, and where understanding these impacts is crucial for interpreting the model's behaviour. The rule is presented as follows:
+\begin{eqnarray*}
+R_{j}= \alpha (R_{j}^+) - \beta(R_{j}^-)
+\end{eqnarray*}
+where
+\begin{eqnarray*}
+{R_{j}}^\pm = \vec{a}_{j} \odot \nabla\left [(\vec{t_{k}}(\boldsymbol{x}))^\pm\frac{R_{k}}{(\vec{z_k}(\vec{a_j}))^\pm}\right], 
+\end{eqnarray*}
+
+where \(\alpha\) and \(\beta\) are parameters that determine the proportion of positive and negative contributions, respectively, and their values are typically chosen such that \(\alpha - \beta = 1\), maintaining conservation of relevance scores throughout the network. The terms \({R_{j}}^+\) and \({R_{j}}^-\) represent the positive and negative contributions of a neuron \(j\) towards the activation of a higher-layer neuron \(k\). 
+
+To reverse this rule through the method proposed in this chapter, the relevance $R_{j}$ is defined as:
+\begin{eqnarray*}
+R_{k}= \alpha (R_{k}^+) - \beta(R_{k}^-)
+\end{eqnarray*}
+where ${R_{j}}^{\pm}$ is defined as in the basic rule, but only by taking the positive or negative activation respectively:
+\begin{eqnarray*}
+{R_{k}}^{\prime\pm}=  R_{k}^\pm\, \odot \frac{\sum_{j}\frac{A_{jk}^\pm \odot J_{kj}(\vec{a_j}^\pm)^\intercal\,}{ \vec{R}_{j}} \odot \vec{R}_j^\prime \, \vec{1}_k^\intercal}{\sum_{j} R_{jk}}
+\end{eqnarray*}
+
+% \section{Results}
+
+\section{Conclusion}
+
+The method proposed in this chapter propagates relevance forward through reversing \LRP\ ~\cite{bach2015pixel}. This allows for examining the relevance of input features to the final output of a neural network. However, it comes with inherent complexities, primarily due to the computational resources required, especially for large, multi-layered networks.
+
+A critical aspect of relevance propagation is the computation of Jacobians, which are mathematical representations used to understand how changes in inputs affect changes in outputs. In the context of this method, Jacobians are utilised to map the relevance propagated from each neuron in layer $\Lambda_k$ to each layer in $\Lambda_j$. In most neural networks, layers have four dimensions, corresponding to different aspects like input channels, output channels, and spatial dimensions (height and width in the case of image processing). When computing the Jacobian for such a network, the dimensionality effectively doubles, resulting in eight-dimensional vectors. This dramatic increase in dimensionality is one of the primary reasons for the heightened computational complexity and memory intensity. The method was tested on an 2xNvidia A100 80GB instance, but still threw an "Out of Memory Error" for a VGG16 model. This model is relatively large, but is still smaller than many of the state of the art models. It has 16 layers and approximately 138 million parameters, this equates to 19 quadrillion parameters when calculating Jacobians for the forward propagation. 
+
+
+The high dimentionality of the Jacobians imposes high memory requirements. However the computation of these high-dimensional Jacobians is not just memory-intensive, but if the memory is not integrated, then accessing memory can significantly slow down the process --- i.e. both access to large-memory enabled instances and instances with a large amount of fast-access memory is needed. As a result of the need to compute Jacobians, the process of propagating relevance forward be considerably slow, acting as a limiting factor to the applicability of this method, especially in cases where real-time analysis or rapid computations are necessary. As neural networks become deeper and more complex, the scalability of relevance propagation methods increasingly becomes a concern. The exponential increase in computation and memory requirements can make it impractical to apply this method to state-of-the-art deep learning models, particularly those used in resource-constrained environments. The final issue is that the complexity of dealing with high-dimensional data can also impact the precision and accuracy of the relevance propagation. Numerical errors and approximations may accumulate, leading to less reliable interpretations of how inputs influence model outputs. 
+
+Several strategies can be adopted to mitigate these computational challenges. Simplifying the model architecture, where feasible, can reduce the computational burden. This might involve using fewer layers or reducing the dimensionality of each layer. However, this may modify the function learned by the neural network and therefore make the interpretability method less precise. Employing approximation methods to compute Jacobians can help in reducing the computational load, although this also comes at a loss in precision. Making use of parallel processing techniques and hardware accelerators like specialised GPUs can significantly speed up the computation of high-dimensional Jacobians. Implementing efficient memory management techniques can help in handling the large memory requirements, such as using sparse matrix representations where appropriate. Further ways to address the computational challenges posed by this method are discussed in Section~\ref{dis:jac}.
+
+
+While propagating relevance forward provides valuable insights into the inner workings of neural networks, the complexity and computational intensity, especially due to the requirement of computing high-dimensional Jacobians, pose significant challenges. Addressing these challenges requires a careful balance between model complexity, computational resources, and the precision of the interpretations derived from the relevance propagation process. The next chapter looks at a different way of assigning a single value of relevance to a complex input feature, which has a far smaller computational and memory requirement. 

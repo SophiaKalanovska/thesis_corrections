@@ -1,0 +1,444 @@
+\chapter{Multi-faceted Clustering Approaches for Isolating Complex Input Features}
+\chaptermark{Isolating Complex Input Features}
+\label{chap:clustering}
+\section{Introduction}
+
+This chapter introduces two novel approaches that group input features into coherent clusters. Each enable the development of methods that assign a single relevance value to complex input features as a whole, rather than treating them individually. Traditional interpretability techniques typically offer a relevance score for each distinct input feature. While this detailed perspective can provide essential insights, it often misses the bigger picture, especially the intricate relationships among input features. As highlighted in Chapter~\ref{chap:framework}, this is especially evident in convolutional neural networks. In a CNN, image pixels often don't function independently. They contribute together to a broader feature. Approaches that focus solely on individual input features risk missing this crucial aspect of \textit{interdependence}.
+
+The first method introduced in this chapter is a heatmap-based clustering approach. This method leverages the power of heatmaps to identify and cluster coherent groups of features. Heatmaps traditionally highlight regions of an input (like pixels in an image) based on their relevance to the model's output. By extending this concept, the method applies advanced clustering algorithms to these heatmaps, grouping pixels or sets of pixels into larger, coherent clusters. This approach allows us to view not just individual pixels but also the collective behavior of groups of pixels that together contribute to the model's predictions. It effectively bridges the gap between micro-level (pixel-level) interpretability and a more macro-level understanding of feature relevance.
+
+The second method combines object detection techniques with heatmap relevance prioritisation. In contrast to the first approach, which clusters based on spatial and feature similarity, this method employs object detection algorithms to identify distinct objects or regions within an input. Once these objects are identified the method selects a limited amount of them on the basis of the heatmap relevance on the given input. By combining object detection with relevance heatmaps, one can isolate the most important objects in the image.
+
+The clustering techniques in this chapter aims to achieve a dual objective: minimise computational overhead while simultaneously augmenting the comprehensibility of interpretative mechanisms. The central premise is to focus on groups of pixels that collectively form features in the deeper layers of the network and contribute to the CNN's decision-making process.
+
+\section{Heatmap-Based Clustering}
+\label{heatmap_clustering}
+
+\subsection{Motivation for Heatmap-Based Clustering}
+
+Interpretability methods function by identifying parts of the input which most affect the output. Pixels that are ascribed extreme relevance values are often indicative of their association with deeper learned feature vectors within the network's architecture. By directing attention to these specific pixels and their associated values, a more in-depth insight into the network's interpretative processes and decision-making mechanisms can be attained.
+
+Input features get transformed and when they reach the deeper layers of the network they don't just function as individual entities, but rather operate together, forming interconnected feature vectors. When an input feature receives a high relevance score through a relevance propagation technique, it doesn't do so in isolation. Instead, this relevance is the result of the interaction the feature had with other input features during the forward pass that together lead to the activation of higher level concepts deeper in the network.
+
+\begin{Conjecture}{Highly Relevant Input Clusters}{}
+Input features with pronounced relevance scores (as attributed by an interpretation technique) and exhibit proximity in the feature space are conjectured to derive their relevance from the \textit{same} deep feature vector. 
+\end{Conjecture} 
+
+From a human perspective, individual pixels gain significance when collectively representing an entity. In CNNs, convolutional layers, as detailed in Section~\ref{sec:conv}, amalgamate activations of features within the same kernel. Based on this, we propose that when a heatmap contains a region of pronounced relevance, the significance attributed to this group of input features likely originates from the same deep feature vector. By grouping such features together the concept of feature hierarchy and dependency within the network is emphasised.
+
+Early stage experiments indicate that regions of pronounced relevance may originate from the same deep feature. This method draws parallels with backward propagation techniques. It commences from the classification point, redistributing the activation of the classification to preceding layers using specific backward propagation rules. A distinguishing feature of this method lies in its selective propagation: when the relevance from the classification reaches a specific neuron that is being inspected (or a group of neurons), only that relevance is propagated, bypassing all other neurons not within this group, even if they have some distributed relevance from the deeper layers.
+
+Figure~\ref{fig:filter} visualises the concept of filtering. Relevance distribution is represented in red, with each neuron possessing a distinct relevance value. Intensity of colour in the graph corresponds to the neuron's relevance magnitude. In the presented example, the neuron of interest is $j$. Filtering propagates only its relevance, sidestepping all other neurons with some relevance to the classification.
+
+\begin{figure}[ht!]
+\begin{center}
+\includegraphics[width=\linewidth]{Figures/Filter.pdf}
+\end{center}
+\caption{Contrast between the neural network's behaviour during relevance propagation and filtering processes. The 'During Filtering' phase emphasises the exclusive propagation of relevance for a specific neuron, while the 'During Classification' phase illustrates a broader relevance distribution.}
+\label{fig:filter}
+\end{figure}
+Using a cat image as the primary experiment subject, Inception V3 serves as the underlying network for classification, with LRP rules dictating the distribution of relevance from a specific tensor. Figure~\ref{fig:visualizing} provides a visual breakdown of what various tensors within the network deem relevant for the input.
+\begin{figure}[ht!]
+\begin{center}
+\includegraphics[width=0.95\linewidth]{Figures/visualisingInception.jpeg}
+\end{center}
+\caption{Visualisation of the Inception V3 network's feature extraction process across different tensor layers. The progression from layer 26 to layer 12 illustrates a refinement in relevance propagation, transitioning from edge detection in initial layers to highlighting distinct features, such as the cat's ears and muzzle, in deeper layers.}
+\label{fig:visualizing}
+\end{figure}
+Initial tensors (like those at layer 26) highlight positive relevance predominantly around the input image's periphery, illustrating the network's foundational capability for edge detection. As we progress deeper into the network, tensors around layer 16 begin to pinpoint more defined features, such as the prominent ears in Figure~\ref{fig:visualizing}. Given that tensors are densely packed with neurons, a more granular approach focusing on a reduced set of neurons should be more effective in detecting such distinct features. Progressing even further, tensors closer to the output layer, like layer 12, start highlighting intricate feature amalgamations, such as the cat's muzzle.
+
+
+Through this visualisation technique, we can discern that specific tensors may activate only certain concentrated regions of the input. This observation supports the hypothesis that input features, which are closely situated in the feature space and display pronounced relevance scores via an interpretation technique, indeed may derive their relevance from the \textit{same} deep feature vector.
+
+\subsection{Heatmap-Based Clustering Approach}
+
+In the heatmap-based approach the clustering is achieved based on heatmap relevance scores. Notably, this method does not give equal weight to all pixels. Instead, it particularly prioritises those pixels with either notably high or significantly low relevance scores. The rationale behind this prioritisation lies in the behaviour observed within deeper network layers. By employing this clustering approach, the complex input features generated are a direct reflection of what the neural network deems relevant. More critically, they encapsulate input features that have had mutual interactions within the network. This methodology sidesteps human biases regarding perceived importance. Instead, it centres exclusively on the network's intrinsic decision-making and feature relevance.
+
+This understanding of pixel relevance can be further articulated mathematically. Consider an input to a convolutional neural network to be a \emph{($C$-channel) image} of dimensions $H\times V$ is described by a real-valued function $I:H\times V\times C \to \bbR$, associating each colour channel $c\in C$ of each pixel $(x,y) \in H\times V$ with an colour value (typically in the range $[0,255]$).
+
+
+Given that definition a relevance heatmap over an image $I$ is a (real-valued) function $\HM: \dom{I} \to \bbR$, over the domain of $I$, describing the relevance values $\vec{R}_0$ associated with each pixel/input neuron of the input layer $0\in \Lambda$. We may define a three-dimensional point space, described as:
+\begin{equation*}
+    S = \big\{(x,y,\max_{c\in C} \HM(x,y,|c|))) : x\in H, y\in V\big\} \subseteq \bbR^3
+\end{equation*}
+
+Each pixel coordinate $(x,y)$ within the dimensions $H\times V$, has its position elevated based on the maximum absolute relevance it holds across all colour channels. This process essentially `lifts' the pixel into a three-dimensional space, represented as $\bbR^3$. In Figure~\ref{Fig:3D}(A), an image of a chimpanzee is shown. The relevance values $\vec{R}_0$ associated with each pixel in the image's three colour channels are determined, leading to the creation of three heatmaps, as can be seen in Figure~\ref{Fig:3D}(B). The max value for each colour channel is then extracted, resulting in a single heatmap as displayed in Figure~\ref{Fig:3D}(C). The heatmap can subsequently be represented in three dimensions by lifting each pixel based on its importance value as depicted in Figure~\ref{Fig:3D}(D).
+
+\begin{figure}[ht!]
+	\begin{center}
+		\includegraphics[width=1\linewidth]{Figures/3D_plot.pdf}
+	\end{center}
+	\caption{In the presented figure: (A) showcases an image of a chimpanzee; (B) depicts the relevance values of the input, which are determined using layer-wise relevance propagation in the context of the VGG16 classification; (C) displays a consolidated heatmap formed by extracting the maximum values from each pixel in the initial three-channel allocation of relevances; (D) represents this heatmap in a three-dimensional point space.}
+	\label{Fig:3D}
+\end{figure} 
+
+Once the pixel relevances are transformed into this 3D point distribution, the method aims to separate the space into clusters of pixels that are not only in close spatial proximity but also exhibit similar relevance values. This allows for the identification of complex input features which have a high probability of being identified together from the same deeper layer feature vector. A drawback of adopting a simplistic approach of clustering with an existing algorithm is computational complexity. Clustering algorithms struggle with efficiency due to the vast volume and high dimensionality of the data. Recognising these limitations, an alternative approach becomes necessary to enhance the scalability and effectiveness of the process.
+
+\subsection{Filtering Relevances}
+In response to this challenge, a more strategic methodology is proposed to tackle the issue of poor scalability. Rather than indiscriminately clustering all the available data, the first step is to filter the input. This process of filtering focuses primarily on reducing the input data to a more manageable size, making the subsequent clustering process more efficient. The filtering prioritises and retains only the pixels that are of very highly positive or very negative relevance values, ensuring that the clustering step works only on data points that are truly meaningful and pertinent to the network. By doing so, not only is the efficiency of the clustering process improved, but the results are also likely to be more relevant and informative.
+\subsubsection{Threshold}
+Areas of the image that do not reach some desired minimum threshold $\theta>0$ for relevance $\max_{c\in C} \HM(x,y,c)\geq \theta$, may be discarded at this stage to further improve efficiency. The threshold is defined as the $p$th percentile of the relevance values. It is a value such that  $p\%$ of the relevance points are less than or equal to that value, and $(100-p)\%$  of the data points are greater than or equal to that value.
+
+\begin{figure}[ht!]
+	\begin{center}
+		\includegraphics[width=\linewidth]{Figures/90_95_98.pdf}
+	\end{center}
+	\caption{This figure provides a visual representation of the impact of varying $p$ values on the selection and portrayal of relevant regions within input images. The figure is segregated into different sections, corresponding to the chosen $p$ values. The figure underlines that depending on the density of the relevant regions different $p$ value has to be chosen.}
+	\label{Fig:90_95_NB}
+\end{figure} 
+
+The $p$ value plays a significant role in the selection of good and representative points. However, identifying a universally optimal value for $p$ poses a significant challenge due to varying distribution characteristics of relevances across different inputs. At lower values of $p$, the resultant heatmap tends to showcase regions of importance as vague, amorphous clusters. In cases where relevances are sharply concentrated in a specific input region, a low $p$ value blurs the boundaries, rendering the visualisation less intuitive and when clustered leading to uninterpretable outputs. Such visualisation may lack the precision necessary for drawing insights or understanding nuanced patterns even after the simplified explanation is presented. Examples of that can be seen in Figure~\ref{Fig:90_95_NB} Top 90\% (A), (B), (C) and Top 95\% (B), (C) where the relevance is very dense in one region of the input.
+
+On the other hand, opting for a higher $p$ value yields crisper, more distinct visualisations of the important pixels selected. While this clarity can indeed be advantageous, it brings its own set of drawbacks. In scenarios where an input contains multiple regions of varying importance, a high $p$ could highlight only the most dominant features while completely neglecting subtler, yet still crucial, regions. For example in Figure~\ref{Fig:90_95_NB} Top 98\% (C) has two spiders and the second one is not selected, as it is smaller than the first one and therefore has a smaller amount of relevant pixels. The challenge amplifies when dealing with inputs where all features have approximately equal relevance. A high $p$ value, in this context, risks making the heatmap too sparse and disjointed. Examples of that can be seen in Figure~\ref{Fig:90_95_NB} Top 95\% (D) and (E) and Top 98\% (D) and (E), where the input contains equally important objects that leads to a sparse selection of pixels within each one of them. This could also lead to problems in clustering later on.
+
+
+The selection of an appropriate $p$ value is contingent upon the nature and distribution of relevances in given inputs. Neither extreme offers a one-size-fits-all solution. Instead, the method proposed in this chapter selects a value of $p$ that doesn't introduce sparsity, which is followed by a method that makes regions with high density crisper. The value used in the examples that follow is $p=90$, which is enough to find all the areas that the explainability algorithm find significantly relevant, without being too discriminating.
+
+\subsubsection{Fisher-Jenks natural breaks}
+To increase clarity in denser portions of the image the method segments the input into $n$ number of regions. Each region vector $\HMhat_i:U_i \to \bbR$, where $\HMhat_i(x,y) = \max_{c\in C} \HM(x,y,c)$ is the maximum relevance across all colour channels for the pixel in position $(x,y)$. Figure~\ref{Fig:segment} shows a heatmap of a car, segmented into 20 regions, where two regions are selected and represented in three-dimensional point space.
+
+\begin{figure}[ht!]
+	\begin{center}
+\includegraphics[width=0.65\textwidth]{Figures/split.pdf}
+\end{center}
+\caption{The figure shows a heatmap of a car, segmented into 20 regions, where two regions are selected and represented in three-dimensional point space.}
+\label{Fig:segment}
+\end{figure} 
+
+Each region $U_i$ is further divided into a tuple of subsets $(U_{i1},\dots, U_{i\ell})$, for some $\ell\geq 1$, where the highest values in region $U_i$ are in the subset $U_{i1}$. The segmentation or division of $U_i$ into these smaller sections is done using a method called the Fisher-Jenks natural breaks algorithm~\cite{fisher1958grouping}. This algorithm is a well-known method used to classify or segment data into natural classes or bins. Its main purpose is to determine the best arrangement of values into different classes in such a way that the variance within each class is minimised. The primary objective of the method is to minimise the sum of the squared deviations from the mean in each subset. Consider each $U_{ij}$ subset having its own mean value $\mu_{ij}$. The squared deviation from the mean for a data point in this subset is the square of the difference between the data point and $\mu_{ij}$. Calculating the squared deviation for all data points within $U_{ij}$ and summing them up, results in the total squared deviations from the mean. Using the algorithm, the resulting subsets $(U_{i1},\dots, U_{i\ell})$ are such that the total of the sum of the squared deviations from the mean $\mu_{ij}$ for each subset $U_{ij}$ is minimised, across all $1\leq j\leq \ell$.
+
+We define a set of points for each region $U_i$ that are in the subset $U_{i1}$ and are above the $p$th percentile value
+\begin{equation*}
+    U_{i_p} = \left\{ (x, y) \in U_{i1} \mid \HMhat(x,y) \geq p_{value} \right\},
+\end{equation*}
+where $p_{value}$ represents the value at the $p$th percentile for $\HMhat$ over the entire input $I$. In Figure~\ref{Fig:Fisher}, we present two distinct regions originally sourced from Figure~\ref{Fig:segment}. Initially, these regions underwent segmentation via the Fisher-Jenks natural breaks algorithm. Subsequently, a segmentation based on the $p_{value}$, corresponding to the 90th percentile of the input values, was executed. For the first region, the input content of high relevance is limited. As a result, even though a significant portion of the input is classified into the top segment post the Fisher-Jenks application, the non-significant values are eliminated when filtered by the $p_{value}$. This outcome essentially mirrors the result of directly selecting the top 90 percentile. Contrarily, in the second region, a substantial number of pixels surpass the top 90 percentile threshold. Hence, applying the Fisher-Jenks natural breaks to this segment results in more dispersed regions.
+
+\begin{figure}[ht!]
+	\begin{center}
+		\includegraphics[width=1\linewidth]{Figures/Fisher.pdf}
+	\end{center}
+	\caption{The two selected regions from Figure~\ref{Fig:segment} segmented using the Fisher-Jenks natural breaks algorithm and the input's 90th percentile.}
+	\label{Fig:Fisher}
+\end{figure} 
+
+Next, we consider the space of points $S_{i\HM}\subseteq \bbR^4$, under the Euclidean metric, given by
+\begin{equation*}
+    S_{i\HM} = \big\{(x,y,c, a\cdot \HMhat(x,y) : (x,y)\in U_{i_p}\big\},
+\end{equation*}
+where $a>0$ is a hyper-parameter that can be tuned to linearly scale the relative contributions of spatial distance and relevance; lower values of $a$ will prioritise spatial similarity, while higher values of $a$ will prioritise similar relevance scores.
+
+We define the space of points $S_{\HM}\subseteq \bbR^4$, under the Euclidean metric, to be the union of all $S_{i\HM}$, defined as:
+\begin{equation}
+    S_{\HM} = \bigcup_{i=1}^{n} \big\{(x,y,c, a\cdot \HMhat(x,y) : (x,y)\in U_{i_p}\big\}
+\label{eq:set_of_points}   
+\end{equation}
+
+It represents all the points that the combined method takes into account. This set of points contains the highest or lowest relevance points within each of the regions, that also conform to being in the top 90\% percentile.
+
+In Figure~\ref{Fig:NB}, we present the results from the $p$th percentile values, the Fisher--Jenks natural breaks, and their combined approach. For consistency and comparison, the same input images from Figure~\ref{Fig:90_95_NB} were employed to underscore the enhancements the combined technique offers over solely using the $p_{value}$. The figure highlights that relying solely on Fisher--Jenks natural breaks doesn't provide an optimal solution. While the Fisher--Jenks natural break method avoids overly concentrated relevances in any given input area and doesn't yield overly sparse or disjoint outputs, it does select features that appear most relevant within its designated region. This inadvertently leads to the selection of features that may not be globally relevant. An evident illustration of this can be seen in Figure~\ref{Fig:NB} (A) and (D), where the lower portions of the input in the former case and the upper portions in the latter have minimal importance, yet some pixels are still chosen. The combined approach ensures that only pixels from the 90th percentile of the input form the important features, while still de-noising densely relevant regions.
+
+\begin{figure}[ht!]
+	\begin{center}
+		\includegraphics[width=0.9\linewidth]{Figures/NB.pdf}
+	\end{center}
+	\caption{This image showcases four contrasting outputs derived from different methods: the low $p$th percentile values, the high $p$th percentile values, the Fisher--Jenks natural breaks, and their combined technique. Each output vividly represents areas of relevance based on the employed method}
+	\label{Fig:NB}
+\end{figure} 
+\subsection{Clustering}
+The next step is to use a clustering algorithm to partition $S_{\HM}$ into a tuple of $k$-many clusters $(C_1,\dots, C_k)$, for some $k\geq 1$. The algorithm used in the examples that follow is \DBSCAN\ algorithm~\cite{EsterKSX96}. \DBSCAN\ differs significantly from other clustering methods. First, DBSCAN doesn't need the number of clusters to be specified beforehand, whereas the majority of clustering algorithms requires one to predetermine the number of clusters. This is a desired quality of the clustering algorithm as the number of features that will be found is unknown and varied dependent on the input. Second, \DBSCAN\ is capable of identifying arbitrarily shaped clusters, making the clustering flexible, whereas many algorithms typically assume that clusters are centred around a centroid. This assumption can be limiting for data that doesn't naturally conform to spherical shapes, which is often the case when dealing with features in images. Furthermore, \DBSCAN\ has an explicit mechanism to handle noise, allowing the algorithm to distinguish between core, border, and noise points. The major drawback of using DBSCAN is that it scales poorly --- a disadvantage minimised by the selection of only the most relevant pixels, which are often less than 5\% of the entire input. 
+
+The algorithm is initialised by labelling all points as unvisited. Next an unvisited point $p$ is randomly selected and marked as visited. If there are at least a minimum amount of points (minPts, which is a hyperparameter) within $\epsilon$ distance of $p$, then $p$ is marked as a core point (\ie it is a point with at least minPts points within $\epsilon$ distance, including itself). Otherwise, $p$ is marked as noise. For each point $p^\prime$ in the  $\epsilon$-neighborhood of the core point $p$, if  $p^\prime$ is unvisited, mark it as visited and query its  $\epsilon$-neighborhood. If $p^\prime$ also has at least minPts points in its $\epsilon $-neighborhood, add those points to the neighborhood of $p$. If $p^\prime$ hasn't been assigned to any cluster, assign it to the current cluster. The algorithm stops when all points have been visited. Given the input $S_{\HM}$, the $\epsilon$-neighborhood of a point $p \in S_{\HM}$ is defined as:
+\begin{equation*}
+N_\epsilon(p) = \{ p^\prime \in S_{\HM} | \text{dist}(p, p^\prime) \leq \epsilon \},
+\end{equation*}
+where $\text{dist}(p, p^\prime)$ is a function representing the distance between points $p$ and $p^\prime$. This distance is usually Euclidean, but DBSCAN can adapt to any distance metric. This clustering step seeks to group together those points in $S_{\HM}$ which share not only spatial proximity but also similar relevance scores, and by doing so, the algorithm essentially groups together input features which the network has likely identified together through deeper layer feature vectors. The choice of the clustering algorithm and its parameters can be crucial to achieving meaningful results. One important aspect to consider is the potential sensitivity of this clustering process to the choice of hyperparameters, such as $a$ in Equation~\ref{eq:set_of_points}. Adjusting $a$ will alter the relative emphasis between spatial and relevance similarity, thereby potentially affecting the resulting clusters. Thus, a sensitivity analysis or an exploratory phase might be beneficial to identify the most informative value of $a$ for a given application or dataset.
+
+In figure~\ref{Fig:DBSCAN} the performance of DBSCAN is shown on top of the pixels selected by the combined approach of taking the top 90th percentile and Fisher-Jenkins on the input.
+\begin{figure}[ht!]
+	\begin{center}
+		\includegraphics[width=0.9\linewidth]{Figures/DBSCAN.pdf}
+	\end{center}
+	\caption{Clusters found by applying DBSCAN on top of selected part of the input from the combined approach of the 90th percentile and Fisher-Jenkins natural breaks.}
+	\label{Fig:DBSCAN}
+\end{figure} 
+\subsection{Heatmap Clustering Results}
+
+The method for identifying features in a global heatmap requires (1) an input to be interpreted, (2) a DNN that the input will be classified on and finally, (3) the type of backward propagation rules that will be used for generating the heatmaps.
+
+The first component to be specified is the type of input, given by the concrete data point that the method will interpret the classification of. Given that backward propagation methods can be applied to any type of deep neural network (\ie it is deep neural network agnostic), the extension proposed for identifying features is also DNN agnostic. Hence, the exact type of data that will be interpreted is arbitrary (\eg the type of input can be an image, audio or video). However, the experiments are performed on images, as the visual nature of this type of of clustering helps in understanding the results better and faster. 
+
+The second component to be selected is the particular deep neural network that will be used for classifying the input data. This choice depends on the type of input being analysed. In the context of visual data, convolutional neural networks (CNNs) are commonly used. The experiments in this study utilise various well-known CNN architectures, including Inception V3~\cite{szegedy2015rethinking}, VGG16~\cite{simonyan2015deep}, VGG19~\cite{simonyan2015deep}, ResNet50~\cite{he2015deep}, and others. Each of these networks has been widely adopted for image recognition tasks and is one of the top performing networks in the ImageNet validation dataset~\cite{ILSVRC15} (10,000,000 labelled images depicting 10,000+ object categories). The choice of network architecture may vary based on the specific use case and the availability of pre-trained models. It's important to note that the method presented in this study is model-agnostic, meaning it can be applied to any deep neural network architecture, regardless of its complexity. While the experiments showcase the approach using well-established networks, the method remains flexible and adaptable to other DNNs.
+
+The final component necessary is the set of backward propagation rules that are used for the generation of the heatmap. As the feature identifying method uses the backward propagation rules to generate its explanation, the more faithful the backward propagation rules are, the more faithful the feature identifying method is. Given that the method is not developing new backward propagation rules, but is using such rules to propagate relevance it is unnecessary to start implementing the backward propagation rules from scratch. Hence, a suitable tool that has already implemented a set of backpropagation tools is used. The library chosen is called iNNvestigate~\cite{inn}. The iNNvestigate library contains the implementation of a wide variety of backward propagation rules described in the Chapter~\ref{chap:lit}, as well as a wide variety of backward propagation rules.
+
+\subsubsection{Comparison based on heatmap generation method}
+
+To accurately evaluate the efficacy and reliability of the proposed method for identifying features in a global heatmap, it is imperative to compare its performance across different heatmap generation methods. Heatmaps serve as an invaluable tool in understanding and visualising the areas in the input that a deep neural network finds significant for its decision-making process. However, the quality and clarity of these visualisations can be highly dependent on the specific generation technique employed. As illustrated in Figure~\ref{Fig:vgg16}, the clustering performance varies considerably across different heatmap generation methods, including DeConvNet~\cite{ZeilerKTF10}, SmoothGrad~\cite{SmilkovTKVW17}, Integrated Gradients~\cite{SundararajanTY17}, Guided Backpropagation~\cite{SpringenbergDBR14}, and Layer-wise Relevance Propagation (LRP)~\cite{bach2015pixel} with parameters alpha 1 beta 0 and alpha 2 beta 1. These evaluations are conducted on the VGG16~\cite{SimonyanZ14a} model using two distinct inputs: a cougar image accurately classified by VGG16 as "cougar," and a building misclassified as a "birdhouse." 
+
+A discernible observation from the image is that clustering efficacy is intrinsically tied to the heatmap technique chosen. DeConvNet, SmoothGrad, and Integrated Gradients yield relatively ambiguous heatmaps, leading to inconsistent post-clustering results. In contrast, the clustering built upon Guided Backpropagation and LRP more effectively filters extraneous data, thereby producing sharper, more coherent outputs. Notably, the LRP method with parameters alpha 2 beta 1 generates particularly sparse heatmaps. The clustering mechanism underlines the relevant regions making it much clearer what the network assigns relevance to in accordance to the relevance propagation rules used. 
+
+\begin{figure}[ht!]
+\begin{center}
+\includegraphics[width=0.8\textwidth]{Figures/Cultering_Results_VGG16.pdf}
+\end{center}
+\caption{Comparative visualization of heatmap generation methods and their subsequent clustering results on VGG16. Two test images - a cougar and a building - are evaluated across methods: DeConvNet, SmoothGrad, Integrated Gradients, Guided Backpropagation, and two variants of Layer-wise Relevance Propagation (LRP). Heatmap clarity and clustering coherence vary significantly among methods, underscoring the pivotal role of heatmap generation in effective feature relevance determination.}
+\label{Fig:vgg16}
+\end{figure} 
+
+\subsubsection{Comparison based on the neural network}
+
+When assessing the relevance of features in a given input, it's crucial to understand that not all deep neural networks (DNNs) are the same. Their architecture and depth can significantly affect the way they perceive and classify data. This section compares the results of the heatmap generation method across various DNN architectures, highlighting the potential variances and consistencies observed.
+
+For this comparison, the study focuses on three prominent architectures - ResNet50, Inception V3 and VGG16. Each of these networks has its unique characteristics and advantages. While VGG19 is renowned for its depth and architectural simplicity, ResNet50 is known for its residual connections which allow it to be trained over many more layers without the fear of vanishing gradients. Inception V3, on the other hand, has a wider network architecture in comparison to the other models and therefore has a higher degree of memorisation of the input.
+
+Figure~\ref{Fig:CLUSTERING_NETWORKS} showcases the heatmap results for a Guenon (a type of monkey) image, classified consistently across all examined networks. Intriguingly, despite this uniformity in classification, the heatmaps reveal a notable divergence in the aspects of the image deemed relevant by each network. However, it is important to emphasise that this variation across networks, while significant, pales in comparison to the larger discrepancies introduced by employing different heatmap generation methods. This suggests that the method chosen for generating heatmaps plays a more crucial role in influencing the interpretation of relevance than the inherent differences between the networks themselves.
+
+
+\begin{figure}[ht!]
+	\begin{center}
+\includegraphics[width=\textwidth]{Figures/CLUSTERING_NETWORKS.pdf}
+\end{center}
+\caption{Heatmap comparisons for a guenon image across prominent DNN architectures: ResNet50, Inception V3, and VGG16. While the guenon is correctly identified by all networks, the feature relevance assignment showcases nuances inherent to each architecture's design and depth. This figure underscores the impact of architectural differences on feature interpretation, even when the classification output remains consistent.}
+\label{Fig:CLUSTERING_NETWORKS}
+\end{figure} 
+
+
+
+The method's efficacy for identifying features in a global heatmap is strongly reliant upon with the neural network in use and the chosen heatmap generation technique. This relationship leads to inherent variability in the results and effectiveness across configurations. However, the methodology is useful for extracting features that the network deems pivotal for its decision-making. This direct association with the network's internal representations offers rich insights into its classification. A further problem arises when the features extracted, while significant for the network, aren't immediately interpretable. Addressing this interpretability gap calls for a more nuanced approach that goes beyond simple feature extraction.
+
+
+\section{Object detection and Heatmap Clustering Approach}
+
+The Object Detection and Heatmap Clustering Approach emerges as a response to the challenge of interpretability in feature extraction. This section delves into how this approach not only identifies key features in images but also represents them in a manner that enhances one's understanding of what the network considers important. By integrating object detection principles with heatmap clustering, the methodology provides a clearer, more comprehensive view of how networks process and prioritise information. 
+
+\subsection{Segment Anything Model (SAM)}
+To bridge this gap between significant feature extraction and human interpretability, the use of a object detection method such as "Segment Anything Method" (\SAM)~\cite{Kirillov2023SegmentA} is recommended. \SAM\ focuses on breaking down the input into segments or regions in a manner that aligns with human understanding. By doing so, \SAM\ translates the intricate and sometimes abstract features highlighted by the network into more understandable visual components that are recognisable to human observers.
+
+A significant challenge arises from the volume of objects that can be present in a single image. This problem is vividly illustrated in Figure~\ref{Fig:Sam_many_masks}, where two inputs are shown, each having more than 90 objects identified. In these instances, the presentation of such a vast number of objects becomes problematic, particularly in terms of human interpretability and visual clarity.
+
+A key issue in this scenario is the use of different colours to represent the numerous identified objects. While colour differentiation is a standard approach in image segmentation and object identification, it becomes less effective when the number of objects is exceedingly high. In the case of Figure~\ref{Fig:Sam_many_masks}, the colours used are not sufficiently distinct, leading to confusion and difficulty in distinguishing one object from another. This challenge is further compounded when attempting to correlate these colours with their respective legend entries, especially once the assisted contribution values are known (See Section~\ref{chapter:REVEAL}). 
+
+This challenge highlights a critical disconnect between the capabilities of advanced image processing algorithms and the limitations of human cognitive processing. While computer vision systems can easily identify and segment a large number of objects in an image, presenting these findings in a manner that is easily digestible and interpretable by humans remains a significant hurdle. 
+
+\begin{figure}[ht!]
+\begin{center}
+\includegraphics[width=\textwidth]{Figures/Clusters_SAM.pdf}
+\end{center}
+\caption{Demonstration of the advanced object identification technique \SAM\ in action, showcasing the segmentation of over 90 distinct objects in two different inputs. Each object is uniquely colour-coded, but the subtlety in colour variation poses a challenge in distinguishing them. The image exemplifies the complexity and limitations of current visualisation methods in handling extensive data sets within the constraints of human cognitive processing }
+\label{Fig:Sam_many_masks}
+\end{figure} 
+
+In addressing the challenge of presenting an overwhelming number of identified objects in a single image, a viable approach is to limit the amount of information displayed. One method to achieve this simplification is by selecting and showcasing only the top 10 elements from the image. Given that the \SAM\ primarily provides the object masks without additional details about the objects, the selection criterion for these top elements can be based on size. By focusing on the size of the object masks, the largest or most prominent 10 objects in the image are chosen for display. This strategy effectively reduces the cognitive load on the viewer and emphasises the most significant elements in the image, making the interpretation more manageable and focused.
+
+
+\begin{figure}[ht!]
+\begin{center}
+\includegraphics[width=\textwidth]{Figures/SAM_Selection.pdf}
+\end{center}
+\caption{}
+\label{Fig:SAM_nor_right}
+\end{figure} 
+
+Choosing the largest detected objects as a means of simplifying the presentation of image data, while effective in reducing complexity, does not always align with the importance or relevance of these objects. This discrepancy is evident in Fig~\ref{Fig:SAM_nor_right}, where a comparison is made between the objects detected based on size and those identified as relevant through a relevance detection method. The figure clearly demonstrates that the most significant objects (both positively and negatively), as per the relevance method, do not coincide with the largest objects in the image.
+
+
+The Segment Anything Method (\SAM) has established itself as a powerful tool for segmenting images into distinct, human-recognizable object masks. Meanwhile, heatmap clustering has proven adept at visually representing areas critical to a neural network's decision-making process. This chapter proposes an integration of \SAM\ with heatmap clustering, an innovative approach designed to bridge the gap between human interpretability and neural network-centric analysis. This integrated methodology enables the selection of interpretable object masks by \SAM, which correspond with the deep feature vectors identified by the neural network as highlighted through the heatmap clustering approach. However, to maximise the effectiveness of this integrated approach and ensure seamless compatibility, specific adjustments and refinements are required.
+
+\subsection{Preprocessing the output of SAM for Integration with Heatmap Clustering}
+
+Before fully examining the integration between SAM and Heatmap Clustering (discussed in Section~\ref{sec:integration}), it is essential to undertake a series of preprocessing steps. These steps are aimed at overcoming certain inherent limitations of \SAM\ and ensures that the object masks $\mathcal{M}_1$ generated by \SAM\ are adequately prepared and formatted to complement and enhance the insights provided by the set of heatmap clustering masks $\mathcal{M}_2$.
+
+
+
+\subsubsection{Generating Masks for Undetected regions}
+
+A notable limitation of SAM is its occasional failure to detect certain parts of an image, possibly overlooking areas critical to the analysis. Figure~\ref{Fig:maks_no_preprocessing} illustrates this issue by showing the masks generated by SAM, where, notably, significant image portions such as bodies of water might be missed.
+
+\begin{figure}[ht!]
+\begin{center}
+\includegraphics[width=\textwidth]{Figures/masks_no_preprocessing.pdf}
+\end{center}
+\caption{Figure~\ref{Fig:Sam_many_masks}(B) is used as the input for SAM's segmentation process, where 116 distinct object masks are displayed. Each mask is uniquely represented by regions in white, indicating the specific objects identified by the SAM algorithm. }
+\label{Fig:maks_no_preprocessing}
+\end{figure} 
+
+To mitigate this issue the first preprocessing step is to conduct a thorough scan of the entire image to find all self-contained regions that \SAM\ might have missed. 
+
+Let $\mathcal{M}_1$ represent a collection of binary masks obtained from the SAM algorithm, where $\mathcal{M}_1 = \{M_1^1, M_1^2, \ldots, M_1^k\} $ and each $M_1^i$ is a matrix of size $n \times m$ with binary entries, where $1$ represents the object detected in the mask and $0$'s represents the non-selected regions. First the sum of all individual masks in $\mathcal{M}_1$ is attend by:
+\begin{equation*}
+S_1 = \sum_{i=1}^{k} M_1^i 
+\end{equation*}
+where \( S_1 \) is a matrix of the same size, indicating the total coverage of the detected objects. Areas not covered by SAM (where \( S_1 \) entries remain zero) indicate potential regions of interest missed by the initial segmentation.
+
+The next step involves creating a complementary mask, \( \overline{M} \), which highlights these overlooked regions. This is achieved by applying the following operation:
+\begin{equation*}
+\overline{M} = 1 - \min(S_1, 1) 
+\end{equation*}
+Here, the function \( \min(S_1, 1) \) ensures that all entries in \( S_1 \) are capped at 1, effectively creating a binary image where detected objects are marked as 1, and undetected areas are 0. By subtracting this from 1, \( \overline{M} \) inversely maps the undetected regions.
+
+The matrix $\overline{M}$ is then subjected to connected component analysis. In this context, a connected component is defined as a group of adjacent cells (\ie sharing an edge or a corner) with the same value, which in this case is 1. The connected component analysis partitions $\overline{M}$ into disjoint components $ C_1, C_2, \ldots, C_p $, each representing a distinct region. For each connected component $ C_j $, a new mask $ M'_j$ is created. This mask has the same dimensions as the original masks in $\mathcal{M}_1$ and is defined as:
+\begin{equation} M'_{j,ij} = \begin{cases} 
+   1 & \text{if the cell } (i, j) \text{ belongs to } C_j \\
+   0 & \text{otherwise} 
+   \end{cases}
+\end{equation} 
+The end result of this sequence of operations is a set of new masks $ \{M'_1, M'_2, \ldots, M'_p\} $ that cover regions of the original image not accounted for in the initial set of masks $ M $. Each $ M'_j $ corresponds to a distinct, previously unidentified region, ensuring that all significant segments of the image are masked. This process, thus, effectively complements the initial segmentation provided by the SAM algorithm, ensuring comprehensive coverage of all relevant regions within the image. The approach is shown in Figure~\ref{Fig:new_masks} which illustrates the additional masks generated for previously undetected regions.
+
+\begin{figure}[ht!]
+\begin{center}
+\includegraphics[width=\textwidth]{Figures/new_masks.pdf}
+\end{center}
+\caption{This image presents the additional masks generated for regions previously undetected by the SAM algorithm. These masks, distinctly delineated, reveal intricate areas of the image that were not covered by the initial segmentation.}
+\label{Fig:new_masks}
+\end{figure} 
+
+An additional constraint can be incorporated into the process to manage the number of masks generated, particularly when a large quantity of small, possibly irrelevant, regions are identified. This constraint involves setting a minimum threshold for the size of a mask in relation to the overall input size. A minimum size threshold, $\tau$, is set as a percentage of the size of the input image $I$. For the purposes of this discussion, $\tau$ is defined to be $0.1\%$ of $I$. Mathematically, this can be expressed as:
+\begin{equation} 
+\tau = 0.001I 
+\end{equation}
+Subsequently, when evaluating each connected component $C_j$ and its corresponding mask $M'_j$, only those components (and masks) are retained for which the number of pixels exceeds~$\tau$. 
+
+Figure~\ref{Fig:selected_new} illustrates the most significant masks obtained from this process. These masks are those that have surpassed the size threshold, thereby highlighting regions of the image that are both non-trivial and previously undetected by the SAM algorithm.
+\begin{figure}[ht!]
+\begin{center}
+\includegraphics[width=0.6\textwidth]{Figures/selected_new_masks.pdf}
+\end{center}
+\caption{Showcases the most significant masks obtained from the refined segmentation process. These selected masks have surpassed the established size threshold, emphasising regions of the image that are substantial and were not initially detected by the SAM algorithm. This collection highlights the utility of incorporating a size criterion, ensuring that only non-trivial, meaningful areas are selected.}
+\label{Fig:selected_new}
+\end{figure} 
+
+The final output of this refined process, now incorporating a size threshold, results in a more curated set of masks. These masks represent significant regions which were not identified by the SAM algorithm, but are of substantial size as per the defined threshold. The resulting set of masks $\mathcal{M}_1 = \{M_1^1, M_1^2, \ldots, M_1^n\}$, where $n = k + p$, where $k$ was the initial size of the masks set produced by SAM and $p$ is the size of the masks produced by the algorithm for generating masks for undetected regions defined here.
+
+\subsubsection{Enhancing Object Detection with Edge Consideration}
+
+CNNs often focus on edges as significant features in image analysis. \SAM, however, typically segments objects without incorporating these crucial edge details. To align \SAM\ segmentation more closely with the neural network's analysis, the boundary of each object mask is expanded by approximately $0.001\%$ in all directions. This expansion ensures the inclusion of edge features, making the segmented objects more aligned with the patterns detected by CNNs.
+
+The process of dilation involves expanding the regions of interest (the `1' values in $M$) by a specified amount. This is achieved using a square matrix $K$ of ones. Let the size of $K$ be $p \times p$, where $p =$  $0.001\%$ of the input. The dilation operation can be mathematically expressed as a convolution of $M$ with $K$ (see Section~\ref{sec:conv} for more details on convolution). This expansion accounts for a wider area around the original points of interest, which also incorporates their edges.
+
+\subsubsection{Resolving Overlapping Clusters}
+
+Overlapping regions in the segmentation and clustering process can lead to information redundancy and complexity. SAM, as it can be seen in the first two masks detected in Figure~\ref{Fig:maks_no_preprocessing}, can detect one object with slight variation more than once. To simplify the analysis and enhance clarity each overlapping segment is assigned to a single mask. 
+An iterative algorithm is introduced for refining a set of masks, with each mask representing a distinct segment of the image. This refinement process is designed to methodically exclude overlapping regions, beginning with the largest mask and proceeding in descending order of size.
+
+We have a set of masks \(\mathcal{M}_1 = \{M_1^1, M_1^2, \ldots, M_1^n\}\), where each mask is a binary matrix in \(\mathbb{R}^{n \times n}\) consisting of \(\{0, 1\}\) entries. The masks are ordered by their size (the number of 1s), meaning \(M_1^1\) is the largest. The objective is to refine each mask in sequence by excluding elements that overlap with any other mask of larger size.
+
+The refinement begins with \(M_1^1\) as the primary mask. For each iteration, consider the mask \(M_1^i\) as the primary mask. For every other mask \(M_1^j\) where \(j > i\), update \(M_1^i\) to remove overlapping components with \(M_1^j\) using bitwise operations:
+\begin{equation}
+M_1^i \leftarrow M_1^i \oplus (M_1^i \land M_1^j),
+\end{equation}
+where \( \oplus \) and \( \land \) represent the bitwise XOR and AND operations, respectively. After processing all masks in the set, the refined collection \(\{M'^1_1, M'^2_1, \ldots, M'^n_1\}\) is obtained.
+
+
+This hierarchical approach ensures that each mask is refined by removing overlaps with all subsequently smaller masks. Figure~\ref{Fig:new_masks_post_processing} showcases the final output after all preprocessing steps, including the generation of masks for regions undetected by SAM, masks expansion for edge consideration, and resolving overlapping clusters.
+
+\begin{figure}[ht!]
+\begin{center}
+\includegraphics[width=\textwidth]{Figures/new_masks_post_processing.pdf}
+\end{center}
+\caption{This figure illustrates the 119 masks generated after all processing steps, including generating masks for undetected regions by SAM, mask expansion for edge consideration, and resolving overlapping clusters.}
+\label{Fig:new_masks_post_processing}
+\end{figure}
+
+\subsection{Integration between SAM and Heatmap Clustering}
+\label{sec:integration}
+We propose a methodological framework to analyze the intersections between two distinct sets of masks, \(\mathcal{M}_1\) (from post-processed SAM) and \(\mathcal{M}_2\) (from Heatmap Clustering). This approach identifies the most relevant objects in an image, prioritising significance over size.
+ 
+Large objects in an image may not necessarily be the most informative or relevant for a given analysis. For instance, in medical imaging, a small anomaly might be of far greater significance than larger but normal anatomical structures. In Figure~\ref{Fig:large} the top 10 objects by size post-processing are shown, one can notice that the objects selected by size do not coincide with the areas found by the heatmap clustering. The main objective of the combination between the heatmap clustering and SAM is to select the top objects that the network finds relevant rather than selecting them by size.
+
+\begin{figure}[ht!]
+\begin{center}
+\includegraphics[width=\textwidth]{Figures/by_size.pdf}
+\end{center}
+\caption{Illustration of the top 10 objects identified by size in a sample image. This highlights the need for more nuanced selection criteria, as larger objects may not correspond to the most relevant or informative elements for analysis.}
+\label{Fig:large}
+\end{figure} 
+
+
+\subsubsection{Sum of Overlaps} 
+
+The basic approach is to measure the total intersection area between each mask in \(\mathcal{M}_1\) and all masks in \(\mathcal{M}_2\).  It serves to evaluate the aggregate extent to which each mask in \(\mathcal{M}_1\) spatially correlates with the entire set \(\mathcal{M}_2\). This method is not concerned with the size of the individual masks in \(\mathcal{M}_1\) or \(\mathcal{M}_2\). It is ideal when the total coverage of overlaps is more important than the relative size of the overlap in any single pairing.
+
+This is achieved for each mask \( M_1^i \) in \(\mathcal{M}_1\), by calculating the sum of pixel-wise logical AND operations with each mask \( M_2^j \) in \(\mathcal{M}_2\). Formally, defined the overlap sum for each \( M_1^i \) as:
+\begin{equation*}
+    O_1^i = \sum_{j} \sum_{k, l} \left( M_1^i(k, l) \land M_2^j(k, l) \right)
+\end{equation*}
+where \( (k, l) \) are pixel coordinates. After computing \( O_1^i \) for all \( i \),  the masks in \(\mathcal{M}_1\) are ranked in descending order of \( O_1^i \). 
+
+Figure~\ref{Fig:most_relevant} showcases the primary regions identified through the methodology focusing on the sum of overlapping areas. This particular metric has a propensity to select larger regions, as these extensive areas are more likely to encompass a greater proportion of the points highlighted in the heatmap clustering maps. Nonetheless, the larger regions recognised align more closely with the regions detected by the heatmap clustering than the ones selected solely by size. This alignment indicates a certain level of specificity, suggesting that while the size of the regions plays a significant role in their selection, the methodology also capably identifies regions that are not just large, but relevant in the context of the heatmap clustering's indications.
+
+\begin{figure}[ht!]
+\begin{center}
+\includegraphics[width=\textwidth]{Figures/most_relevant.pdf}
+\end{center}
+\caption{Depicted here are the key regions identified using the sum of overlapping areas method. This approach inherently gravitates towards larger regions, as they generally encompass more points from the heatmap clustering maps. However, the figure underscores that the selected larger regions are not only sizeable but also closely aligned with the areas highlighted by the heatmap clustering, illustrating a nuanced balance between size and relevance in identifying areas of interest.}
+\label{Fig:most_relevant}
+\end{figure} 
+
+\subsubsection{Maximum Percentage Overlap with $\mathcal{M}_1$} 
+
+To address the limitations of the methodology focusing on the sum of overlapping areas, this method assesses for each mask in \(\mathcal{M}_1\) the proportion of its area that achieves maximal overlap with any single mask in \(\mathcal{M}_2\). It quantitatively represents the degree to which each mask in \(\mathcal{M}_1\) is covered within a mask in \(\mathcal{M}_2\). This is particularly useful where the primary interest lies in discerning how comprehensively each object mask in \(\mathcal{M}_1\) is encapsulated by the feature masks in \(\mathcal{M}_2\).
+
+For each mask \( M_1^i \) in \(\mathcal{M}_1\), compute the percentage of \( M_1^i \)'s area that overlaps with each \( M_2^j \) in \(\mathcal{M}_2\), and take the maximum of these percentages. Define this maximum percentage overlap for each \( M_1^i \) as:
+\begin{equation*}
+    P_1^i = \max_j \left( \frac{\sum_{k, l} \left( M_1^i(k, l) \land M_2^j(k, l) \right)}{\sum_{k, l} M_1^i(k, l)} \right)
+\end{equation*}
+After computing \( P_1^i \) for all \( i \),  the masks in \(\mathcal{M}_1\) are ranked in descending order of \( P_1^i \). 
+
+Figure~\ref{Fig:covarage_mask1} illustrates the primary regions identified through the methodology focusing on maximum percentage overlap of the masks from the heatmap based clustering $\mathcal{M}_2$ with the masks in $\mathcal{M}_1$. This metric tends to favour smaller regions, primarily because the smaller the area of the mask, the higher the likelihood that a significant proportion of it aligns with the heatmap clustering regions. Consequently, the metrics preference for small regions results in a strong correlation with the heatmap clustering outputs. This precision is evident in the figure, where these smaller, selected regions demonstrate an exceptional degree of accuracy in mirroring the spatial patterns and focal points highlighted by the heatmap clustering technique.
+
+\begin{figure}[ht!]
+\begin{center}
+\includegraphics[width=\textwidth]{Figures/covarage_mask1.pdf}
+\end{center}
+\caption{This figure displays the selected regions identified by the method prioritising maximum percentage overlap of the masks from the heatmap-based clustering with those in $\mathcal{M}_1$. Notably, it reveals a tendency to highlight smaller regions, which is attributable to the proportionally higher coverage these regions achieve in alignment with the heatmap clustering. The precision and exactness of these regions in reflecting the heatmap clustering patterns are visually evident, demonstrating the method's efficacy in pinpointing areas of significant relevance despite their smaller size.}
+\label{Fig:covarage_mask1}
+\end{figure} 
+
+\subsubsection{Maximum Percentage Overlap with $\mathcal{M}_2$} 
+
+Conversely, this method evaluates the extent to which a mask from $\mathcal{M}_1$ covers a mask in $\mathcal{M}_2$. It effectively reverses the perspective of ``Maximum Percentage Overlap with $\mathcal{M}_1$'', focusing on the representational capacity of \(\mathcal{M}_2\) over \(\mathcal{M}_1\). The emphasis here lies in having a given heatmap based cluster encapsulated by a single object mask within \(\mathcal{M}_1\). It is particularly useful as the masks in \(\mathcal{M}_2\) are representative of specific deeper layer features, and the objective is to assess their coverage and representation across the \(\mathcal{M}_1\) masks chosen. The maximum percentage overlap for each \( M_1^i \) is defined as:
+\begin{equation*}
+P_2^i = \max_j \left( \frac{\sum_{k, l} \left( M_1^i(k, l) \land M_2^j(k, l) \right)}{\sum_{k, l} M_2^j(k, l)} \right)
+\end{equation*}
+After computing \( P_2^i \) for all \( i \),  the masks in \(\mathcal{M}_1\) are ranked in descending order of \( P_2^i \). 
+
+Figure~\ref{Fig:covarage_mask2} presents the principal regions selected through this method. This metric demonstrates a dual character in its identification process. On one hand, it can accurately detect objects that almost precisely correspond to the patterns and areas highlighted by the heatmap-based clustering. These instances represent a high degree of alignment between the selected \(\mathcal{M}_1\) objects and the heatmap clusters. On the other hand, the method also has a propensity to identify considerably larger objects from \(\mathcal{M}_1\) that, while only partially aligning with a heatmap cluster, fully encapsulate it. In such cases, the criterion of a mask from \(\mathcal{M}_1\) consuming 100\% of a cluster from the heatmap-based clustering \(\mathcal{M}_2\) triggers an immediate selection of that cluster. This aspect of the methodology can lead to the selection of larger objects that, while containing a large portion of a heatmap cluster, might introduce some discrepancy between the scale and specificity of the identified regions.
+
+\begin{figure}[ht!]
+\begin{center}
+\includegraphics[width=\textwidth]{Figures/covarage_mask2.pdf}
+\end{center}
+\caption{This figure illustrates the regions identified by emphasising the complete encapsulation of heatmap-based clusters by individual object masks in $\mathcal{M}_1$. It highlights the method's ability to accurately align with certain heatmap clusters while also indicating instances where larger $\mathcal{M}_1$ objects are selected for completely encompassing smaller heatmap clusters.}
+\label{Fig:covarage_mask2}
+\end{figure} 
+
+\subsubsection{Combined Average Overlap Percentage}
+
+This method represents a balanced metric that accounts for the overlap percentage to both \(\mathcal{M}_1\) and \(\mathcal{M}_2\). It offers a bidirectional analysis of overlap, considering both the proportion of each \(\mathcal{M}_1\) mask covered by \(\mathcal{M}_2\) and the relative coverage of each \(\mathcal{M}_2\) mask by \(\mathcal{M}_1\). It ensures that neither set of masks exerts disproportionate influence on the outcome, thus enabling a more holistic interpretation of the overlap between the heatmap cluster maps in \(\mathcal{M}_2\) and the SAM object maps in $\mathcal{M}_1$. 
+
+For each mask \( M_1^i \) in \(\mathcal{M}_1\), an average of the overlap percentages relative to both \( M_1^i \) and \( M_2^j \) is computed. This combined metric for each \( M_1^i \) is defined as:
+\begin{equation*}
+C^i = \max_j \left( \frac{1}{2} \left[ \frac{\sum_{k, l} \left( M_1^i(k, l) \land M_2^j(k, l) \right)}{\sum_{k, l} M_1^i(k, l)} + \frac{\sum_{k, l} \left( M_1^i(k, l) \land M_2^j(k, l) \right)}{\sum_{k, l} M_2^j(k, l)} \right] \right)
+\end{equation*}
+
+Figure~\ref{Fig:covarage_masks} exhibits the key regions identified through the methodology that calculates the combined average overlap percentage. This metric balances two distinct perspectives: precision and comprehensiveness. On one side, it mirrors the approach of ``Maximum Percentage Overlap with \(\mathcal{M}_1\)'', resulting in the selection of highly precise regions. These regions are characterised by a substantial proportion of their area aligning closely with the heatmap clustering, indicating a high level of specificity and detail in the correlation with the relevant features identified by the heatmap. On the other side, this metric also echoes the essence of ``Maximum Percentage Overlap with \(\mathcal{M}_2\)'', leading to the identification of `bigger picture' regions. These are regions that might be larger in size but are significant due to their complete encapsulation of areas deemed relevant by the heatmap clustering. Unlike the precision-focused regions, these larger regions provide a more holistic view, capturing extensive areas that include but are not limited to the specific clusters identified in the heatmap.
+
+\begin{figure}[ht!]
+\begin{center}
+\includegraphics[width=\textwidth]{Figures/covarage_masks.pdf}
+\end{center}
+\caption{This figure illustrates regions selected by the combined average overlap percentage method, showcasing a balanced blend of precision and comprehensiveness. It highlights areas with high detail alignment from \(\mathcal{M}_1\) and broader regions encompassing heatmap clusters from \(\mathcal{M}_2\), thus capturing both specific and extensive features relevant to the analysis.}
+\label{Fig:covarage_masks}
+\end{figure} 
+
+Each method embodies a distinct analytical perspective and can be selected based on the specific nuances and demands of the research question or application at hand. The choice of method is contingent upon the research objectives and the specific characteristics of the masks and their intended interpretative use within the study.
+
+\section{Conclusion}
+
+This chapter has rigorously explored the challenge of isolating complex input features through advanced clustering techniques, specifically focusing on heatmap-based clustering and its integration with object detection models like the Segment Anything Model (\SAM). These methodologies exemplify the practical implementation of the broader framework’s objective: to enhance both the faithfulness and interpretability of explanations in deep neural networks (Chapter~\ref{chap:framework}).
+
+The heatmap clustering methodology plays a pivotal role in extracting features that are deemed crucial by the network for its decision-making process. This direct link to the network’s internal representations provides profound insights into its classification mechanisms. However, a significant challenge arises when the extracted features, although vital for the network, lack immediate interpretability. This interpretability gap necessitates a more sophisticated approach that transcends simple feature extraction, calling for strategies that render these complex data points comprehensible.
+
+In response to this challenge, the latter part of the chapter introduces an object detection and heatmap clustering approach. This methodology not only pinpoints key features within images but also presents them in a way that significantly enhances our understanding of the aspects deemed important by the network. By combining object detection principles with heatmap clustering, this approach offers a more more comprehensive and nuanced interpretations of neural network decisions.
+
+The methodologies and insights outlined in this chapter are not just standalone advancements. They crucially feed into the broader objective of assigning singular importance values to complex input features, a central theme in forthcoming discussions (see Chapters \ref{chapter:REVEAL} and \ref{chapter:revLRP}).

@@ -1,0 +1,275 @@
+\documentclass[12pt]{muthesis}
+\usepackage{graphicx}
+\usepackage{a4wide}
+\usepackage[dvipsnames]{xcolor}
+\usepackage{color}
+\tolerance=1
+\emergencystretch=\maxdimen
+\hyphenpenalty=10000
+\hbadness=10000
+\usepackage[square,sort,comma,numbers]{natbib} %References
+\usepackage{amsmath,amssymb,amsthm,hyperref,enumitem}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage{changepage}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{corollary}{Corollary}[theorem]
+\newtheorem{lemma}[theorem]{Lemma}
+\usepackage{caption}
+\usepackage{wrapfig}
+\usepackage{tikz,pgfplots}
+\usepackage{pgf}
+\usetikzlibrary{arrows}
+\setcounter{tocdepth}{2}
+\setcounter{secnumdepth}{3}
+\usepackage{titlesec}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{pdfpages}
+\usepackage{minted}
+\newcommand{\ie}{\textit{i.e.}\ }
+\newcommand{\eg}{\textit{e.g.}\ }
+\newcommand{\LRP}{\textsc{lrp}}
+\newcommand{\CTC}{\textsc{ctc}}
+\newcommand{\CTN}{\textsc{ctn}}
+\newcommand{\RAP}{\textsc{rap}}
+\newcommand{\REVEAL}{\textsc{Reveal}}
+\newcommand{\DBSCAN}{\textsc{Dbscan}}
+\newcommand{\SAM}{\textsc{Sam}}
+
+\newcommand{\abs}[1]{\left|{#1}\right|}
+% \newcommand{\passto}{\hookrightarrow}
+\newcommand{\NN}{\mathcal{N}}
+\newcommand{\HM}{\mathcal{H}}
+
+\titlespacing*{\section}{0pt}{0\baselineskip}{0\baselineskip}
+\titlespacing*{\subsection}{0pt}{0\baselineskip}{0\baselineskip}
+\titlespacing*{\subsubsection}{0pt}{0\baselineskip}{0\baselineskip}
+\newcommand{\bbR}{\mathbb{R}}
+\newcommand{\passto}{\hookrightarrow}
+\newcommand{\bbH}{\mathbb{H}}
+\newcommand{\act}{\varphi}
+%\newcommand{\net}[1][j]{\mathit{net}_{#1}}
+\newcommand{\net}[1][k]{\vec{net}_{#1}}
+\newcommand{\norm}[1]{\|{#1}\|}
+\newcommand{\dom}[1]{\mathrm{dom}(#1)}
+\newcommand{\HMhat}{\hat{\HM}}
+\newcommand{\HMtilde}{\tilde{\HM}}
+\newcommand{\ReLU}{\mathsf{ReLU}}
+\newcommand{\Htilde}{\tilde{H}}
+\newcommand{\Hhat}{\hat{H}}
+\newcommand{\tr}[1]{#1^\intercal}
+\setlength{\parskip}{\baselineskip}
+\usepackage{multirow}
+\titleformat{\paragraph}
+{\normalfont\normalsize\bfseries}{\theparagraph}{1em}{}
+\titlespacing*{\paragraph}
+{0pt}{3.25ex plus 1ex minus .2ex}{1.5ex plus .2ex}
+\setlist[description]{leftmargin=\parindent,labelindent=\parindent}
+\input{py_styling}
+\usepackage{ragged2e}
+\justifying
+\usepackage{empheq}
+
+%% Margin notes from CH and ML
+\usepackage{todonotes}
+\newcommand{\chris}[1]{\todo[color=Purple!40]{\footenotesize CH: #1}}
+\newcommand{\mike}[1]{\todo[color=red!40]{\footenotesize ML: #1}}
+\newcommand{\chrislong}[1]{\todo[color=Purple!40,inline]{\footenotesize CH: #1}}
+
+\usepackage{amsthm}
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}[section]
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\newcommand{\cnet}[1][k]{\text{$c$-}\net[#1]}
+\setstretch{1.5} 
+% \usepackage{nomencl}
+% \makenomenclature
+
+% \renewcommand{\nomname}{Notation}
+
+% \usepackage{etoolbox}
+% \renewcommand\nomgroup[1]{%
+%   \item[\bfseries
+%   \ifstrequal{#1}{P}{Physics Constants}{%
+%   \ifstrequal{#1}{N}{Number Sets}{%
+%   \ifstrequal{#1}{O}{Other Symbols}{}}}%
+% ]}
+\usepackage[framemethod=TikZ]{mdframed}
+\usepackage{amsmath}
+\usepackage{cleveref}
+\usepackage[most]{tcolorbox}
+
+
+\newtcbtheorem[auto counter, number within = chapter]{Definition}{Definition}{
+  enhanced,
+  attach boxed title to top left={
+    yshift=-0.1in,xshift=0.15in
+  },
+  colback=white,
+  colframe=blue!25,
+  fonttitle=\bfseries,
+  coltitle=black,
+  boxed title style={
+    sharp corners,
+    size=small,
+    colback= blue!10,
+    colframe=blue!10,
+  } 
+}{prf}
+
+\newtcbtheorem[auto counter, number within = chapter]{Desideratum}{Desideratum}{
+  breakable,
+  enhanced,
+  attach boxed title to top left={
+    yshift=-0.1in,xshift=0.15in
+  },
+  colback=white,
+  colframe=red!25,
+  fonttitle=\bfseries,
+  coltitle=black,
+  boxed title style={
+    sharp corners,
+    size=small,
+    colback= red!10,
+    colframe=red!10,
+  } 
+}{prf}
+
+
+\newtcbtheorem[auto counter, number within = chapter]{Conjecture}{Conjecture}{
+  breakable,
+  enhanced,
+  attach boxed title to top left={
+    yshift=-0.1in,xshift=0.15in
+  },
+  colback=white,
+  colframe=orange!25,
+  fonttitle=\bfseries,
+  coltitle=black,
+  boxed title style={
+    sharp corners,
+    size=small,
+    colback= orange!10,
+    colframe=orange!10,
+  } 
+}{prf}
+
+
+\newtcbtheorem[auto counter, number within = chapter]{Example}{Example}{
+  breakable,
+  enhanced,
+  attach boxed title to top left={
+    yshift=-0.1in,xshift=0.15in
+  },
+  colback=white,
+  colframe=ForestGreen!25,
+  fonttitle=\bfseries,
+  coltitle=black,
+  boxed title style={
+    sharp corners,
+    size=small,
+    colback= ForestGreen!20,
+    colframe=ForestGreen!20,
+  } 
+}{prf}
+
+
+\usepackage{footnote}
+\usepackage{etoolbox}
+\BeforeBeginEnvironment{Example}{\savenotes}
+\AfterEndEnvironment{Example}{\spewnotes}
+
+%\renewcommand{\chris}[1]{}
+%\renewcommand{\mike}[1]{}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Front Matter - project title, name, supervisor name and date
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+% Word count with: texcount template.tex -inc -incbib -sum
+% Spell check with: aspell -t -c template.tex
+
+\hbadness=10000
+\makeindex
+
+\begin{document}
+\title{Generating faithful and interpretable explanations of deep neural networks}
+\author{Sophia Vesselinova Kalanovska}
+\date{December 2023}
+\dept{Department of Informatics}
+\faculty{Natural and Mathematical Sciences}
+\university{King's College London}
+\crest{KCL_crest_hires.pdf}
+\maketitle
+
+
+\prefacesection{Abstract}
+Deep Neural Networks have received significant attention due to their unparalleled capacity to learn features from input data, thereby enhancing task performance. However, the learned features are not encoded in a form that is understandable by humans, making it difficult to ensure that decisions are not simply a result of spurious correlations in the data. With the goal of addressing this issue, interpretability of neural networks has become a prominent research direction. However, attempts to generate explanations have resulted in an apparent trade-off between faithfulness and interpretability. In short, the more faithful (i.e. accurate) the explanation with respect to the underlying model, the harder it is for humans to understand.
+
+\noindent
+This thesis presents three major contributions — the first is the overarching framework that harmonises faithfulness and interpretability, the second and third contributions represent novel methods for implementing this overarching framework. In the proposed framework, instead of assigning significance scores to individual features or simplifying inputs into binary importance, correlated features are grouped together and a singular importance score is assigned to each cluster. A second contribution comprises a set of tools as to how features can be best clustered for the simplified explanation to be meaningful as well as interpretable. The final contribution defines two sets of forward-propagation rules each with their own advantages and disadvantages for assigning an importance value to a cluster of features.
+
+\noindent
+This detailed account of each feature cluster’s role enhances the clarity of the model's complex decision-making. However, despite this detail, interpretability is not compromised, as each feature cluster is assigned a singular, clear metric. Additionally, these individual importance scores allow for a hierarchy of feature clusters, displaying which most influence the model's decision. Such an ordered representation not only simplifies the explanation for human understanding but also retains the subtle distinctions among features that are crucial for a faithful representation of the model's behaviour. The validity of these methods are demonstrated on large-scale pre-trained convolutional neural networks, and performance is compared with existing relevance methods. The results show a promising solution for interpreting deep neural networks, providing valuable insights into the inner workings of these models while maintaining human-comprehensibility and faithfulness to the model.
+
+
+\prefacesection{Acknowledgements}
+
+First and foremost, I would like to thank to my partner, Charles Higgins. Without your constant support, patience, and encouragement, the completion of this thesis would not have been possible. I find it hard to sufficiently express just how much your help has meant to me and how thankful I am to have you by my side.
+
+\noindent
+My supervisor, Dr. Christopher Hampson, deserves special mention for his support and readiness to share his extensive knowledge. His numerous enlightening whiteboarding sessions have been instrumental in shaping my academic development. Further thanks are owed to Dr. Daniele Magazzeni for giving me the opportunity to do a PhD and Dr. Michael Luck for his critical role in overseeing the majority of my PhD journey. His guidance in organising my thoughts and work are deeply appreciated.
+
+\noindent
+I am grateful for the support provided by the Center for Doctoral Training in Safe and Trusted AI, which offered me a sponsorship essential for undertaking this PhD.
+
+\noindent
+I also extend my gratitude to my friends, fellow PhD students and undergraduate and postgraduate students I have had the privilege of teaching over the years. Your presence and support have been crucial in making these past few years not just productive, but also enjoyable. 
+
+\noindent
+Above all, I owe a heartfelt thanks to my family for their endless support and understanding throughout my long education. To my parents, whose belief in me has been unwavering from my earliest days in school to the completion of this PhD. Your collective faith and love have been a constant source of motivation and strength.
+
+\noindent
+Thank you all for your part in this journey.
+\contentspage
+
+% \printnomenclature
+
+%%%%%%%%%%%%%%
+% Report Content
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% You can write each chapter directly here or in a separate .tex file and use the include command.
+
+\include{Chapters/Introduction}
+\include{Chapters/Background}
+\include{Chapters/LiteratureReview}
+\include{Chapters/Framework}
+\include{Chapters/IdentifyingFeatures}
+\include{Chapters/SingleRelevanceValue}
+\include{Chapters/Relevance_Propagation_Rules}
+% \include{Chapters/Contribution/Feature_Contribution}
+\include{Chapters/Contribuition_New}
+\include{Chapters/Results}
+% \include{Chapters/IdentifyingRelationships}
+% \include{Chapters/LabelingFeatures}
+% \include{Chapters/ProfessionalIssues}
+\include{Chapters/Conclusion}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% References
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\bibliographystyle{plain}
+\bibliography{references.bib}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Appendices
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\appendix
+\include{Appendices/appendix}
+\include{Appendices/UserGuide}
+\include{Appendices/SourceCode}
+\end{document}
